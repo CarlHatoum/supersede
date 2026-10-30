@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "supersede"
-version = "0.1.0"
+version = "0.2.0"
 description = "Benchmark and tooling for RAG over knowledge bases where documents get superseded, contradict each other, or are fabricated."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["pytest>=8", "ruff>=0.6", "numpy>=1.26"]
 dense = ["sentence-transformers>=3", "numpy>=1.26"]
 
 [tool.setuptools.packages.find]

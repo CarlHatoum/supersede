@@ -8,26 +8,27 @@ Supersede is an open benchmark and toolkit for measuring and fixing this:
 2. **Fixes**, at two points: an ingestion-time *librarian* that infers lineage and quarantines suspect documents, and retrieval/answer-time policies that surface the current version and cite the old one.
 3. **Production path:** an incremental ingestion service, an MCP server, and published latency and cost numbers *(planned)*.
 
-> Status: **v0.1**. RFC slice, BM25 baseline and lineage-aware reranking with known (oracle) lineage. No LLM is involved yet, so every number below is deterministic and free to reproduce.
+> Status: **v0.2**. RFC slice, with BM25, dense (`bge-small-en-v1.5`) and hybrid (RRF) retrievers, and lineage-aware reranking with known (oracle) lineage. No LLM is involved yet, so every number below is deterministic and free to reproduce.
 
-## First result: lexical retrieval prefers superseded documents
+## First result: every retriever prefers superseded documents, and hybrid is the worst
 
 The RFC index lists 9,852 RFCs. 1,384 of them are obsoleted by a later RFC, through 1,543 `obsoletes` links that form 800 lineage chains, the longest with 35 documents. For each link we query the topic in two ways: by the old document's title (the name users know) and by the new one's. The gold answer is the *current* head of the lineage.
 
-Test split, BM25 top-10, 95% bootstrap CI:
+Test split, top-10, 95% bootstrap CI. "Promote" puts the current version of each stale hit just above it, using oracle lineage:
 
-| query wording | policy | n | stale@1 ↓ | current@1 ↑ | current@10 ↑ |
+| retriever | query wording | n | stale@1 ↓ (no policy) | current@1 ↑ (no policy) | current@1 ↑ (promote) |
 |---|---|---|---|---|---|
-| new title | none | 727 | **0.417** [0.382, 0.451] | 0.440 [0.406, 0.477] | 0.931 |
-| new title | filter superseded | 727 | 0.000 | 0.750 [0.719, 0.781] | 0.931 |
-| new title | promote current | 727 | 0.000 | **0.857** [0.832, 0.882] | 0.983 |
-| old title | none | 784 | **0.722** [0.691, 0.755] | 0.152 [0.126, 0.177] | 0.790 |
-| old title | filter superseded | 784 | 0.000 | 0.568 [0.532, 0.602] | 0.790 |
-| old title | promote current | 784 | 0.000 | **0.874** [0.849, 0.895] | 0.986 |
+| BM25 | new title | 727 | 0.417 [0.382, 0.451] | 0.440 [0.406, 0.477] | 0.857 [0.832, 0.882] |
+| dense | new title | 727 | 0.459 [0.421, 0.494] | 0.446 [0.411, 0.484] | 0.904 [0.882, 0.924] |
+| hybrid RRF | new title | 727 | **0.528** [0.491, 0.561] | 0.395 [0.362, 0.432] | **0.923** [0.902, 0.942] |
+| BM25 | old title | 784 | 0.722 [0.691, 0.755] | 0.152 [0.126, 0.177] | 0.874 [0.849, 0.895] |
+| dense | old title | 784 | 0.749 [0.718, 0.779] | 0.170 [0.143, 0.196] | 0.916 [0.895, 0.934] |
+| hybrid RRF | old title | 784 | **0.816** [0.790, 0.844] | 0.111 [0.089, 0.133] | **0.927** [0.909, 0.945] |
 
-- Even when the query uses the **new** document's own wording, a superseded version ranks first **42%** of the time. With the familiar old name it's **72%**.
-- Dropping superseded hits isn't enough: recall is lost when the replacement was never retrieved.
-- Replacing each stale hit with its current version (while keeping the stale one below it) fixes most of the gap. *This assumes lineage metadata is available.* Real corpora rarely have it, and inferring it is the next research step.
+- **This isn't a keyword-matching artefact.** Even when the query uses the *new* document's own wording, every retriever ranks a superseded version first 42–53% of the time.
+- **Hybrid fusion makes it worse.** An old version and its replacement are close under *both* lexical and semantic similarity, so rank fusion rewards whichever of them matches more consistently, and that is often the older, more widely cited one. Hybrid is still the best base once lineage is applied (current@1 0.92), because it retrieves the whole lineage chain.
+- Dropping superseded hits isn't enough (see the `filter` rows in [results/](results/)): recall is lost when the replacement was never retrieved.
+- These "promote" numbers **assume lineage metadata is available**. Real corpora rarely have it, and inferring it is the next research step.
 
 Full tables, with all metrics for both splits, are in [results/](results/).
 
@@ -39,7 +40,7 @@ make test
 make reproduce RFC_INDEX_SHA256=e1669ddd5a87561fe548e737865f486e376ae58b5011a73a92a72f0aac32363a
 ```
 
-`make reproduce` downloads `rfc-index.xml` if it's missing, builds `data/rfc/` (`corpus.jsonl`, `lineage.jsonl`, `queries.jsonl`, `manifest.json`) and writes `results/rfc_staleness_{dev,test}.{json,md}`. It takes about 30 seconds on a laptop, with no GPU and no API keys.
+`make reproduce` downloads `rfc-index.xml` if it's missing, builds `data/rfc/` (`corpus.jsonl`, `lineage.jsonl`, `queries.jsonl`, `manifest.json`) and writes `results/rfc_staleness_{dev,test}.{json,md}`. The first run downloads the embedding model and caches document embeddings under `data/rfc/emb/`; it takes about 2.5 minutes on an Apple Silicon laptop, with no API keys. Reruns produce byte-identical results. For the dependency-free BM25-only run, use `make reproduce RETRIEVERS=bm25`.
 
 The RFC index is a live file. The published numbers use the snapshot with the SHA-256 above, and the build fails if the hash doesn't match. A frozen copy of the snapshot will be released alongside the dataset.
 
@@ -55,8 +56,9 @@ The RFC index is a live file. The published numbers use the snapshot with the SH
 
 | | Milestone |
 |---|---|
-| ✅ | RFC lineage benchmark, BM25 baseline, oracle reranking, bootstrap CIs, CI tests |
-| ⏭ | Dense and hybrid retrievers; natural-language questions; full-text chunks |
+| ✅ | v0.1: RFC lineage benchmark, BM25 baseline, oracle reranking, bootstrap CIs, CI tests |
+| ✅ | v0.2: dense and hybrid (RRF) retrievers, cached embeddings |
+| ⏭ | LLM layer with a published response cache; change-aware natural-language questions; answer-level staleness with a human-validated judge |
 | | Librarian agent that **infers** lineage without metadata (dates, titles, NLI, semantic entropy across versions) |
 | | Contamination injector: synthetic fabricated standards and contradictions at controlled rates (dose-response) |
 | | FAA Advisory Circulars (`cancels AC xx-yyA`) and UNECE regulations (series of amendments) |
@@ -70,7 +72,7 @@ The RFC index is a live file. The published numbers use the snapshot with the SH
 src/supersede/
   corpus.py        Doc model, JSONL I/O
   lineage.py       supersession graph: current versions, components
-  retrieval.py     dependency-free BM25
+  retrieval.py     BM25 (dependency-free), dense, hybrid RRF
   rerank.py        version-aware policies (none / filter / promote)
   metrics.py       stale@1, current@k, MRR, bootstrap CI
   bench/rfc.py     RFC corpus + query builder

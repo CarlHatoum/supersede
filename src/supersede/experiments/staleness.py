@@ -1,11 +1,13 @@
-"""Experiment 0: how often does lexical retrieval surface a superseded version?
+"""Experiment 0: how often does retrieval surface a superseded version?
 
-This needs no LLM, so it is deterministic and free to reproduce. It runs BM25
-with each version-aware policy over the RFC queries and writes
-``results/<name>.json`` and ``results/<name>.md``.
+This needs no LLM. It runs each retriever (BM25, dense, hybrid) with each
+version-aware policy over the RFC queries and writes ``results/<name>.json``
+and ``results/<name>.md``. Dense embeddings are cached under
+``<data>/emb/``, so reruns are deterministic.
 
 Usage:
-    python -m supersede.experiments.staleness --data data/rfc --split test
+    python -m supersede.experiments.staleness --data data/rfc --split test \
+        --retrievers bm25,dense,hybrid
 """
 
 from __future__ import annotations
@@ -24,9 +26,11 @@ from supersede.metrics import (
     stale_before_current,
 )
 from supersede.rerank import POLICIES
-from supersede.retrieval import BM25
+from supersede.retrieval import BM25, DenseRetriever, HybridRRF, Retriever
 
 K = 10
+RETRIEVERS = ("bm25", "dense", "hybrid")
+DENSE_MODEL = "BAAI/bge-small-en-v1.5"
 METRICS = ("stale@1", "stale_before_current", "current@1", "current@10", "mrr_current")
 
 
@@ -41,29 +45,51 @@ def score(ranking: list[str], q: dict) -> dict[str, float]:
     }
 
 
-def run(data: Path, split: str, seed: int = 0) -> dict:
+def build_retrievers(
+    names: list[str], docs_text: list[tuple[str, str]], data: Path
+) -> dict[str, Retriever]:
+    built: dict[str, Retriever] = {}
+
+    def get(name: str) -> Retriever:
+        if name not in built:
+            if name == "bm25":
+                built[name] = BM25(docs_text)
+            elif name == "dense":
+                built[name] = DenseRetriever(docs_text, DENSE_MODEL, cache_dir=data / "emb")
+            elif name == "hybrid":
+                built[name] = HybridRRF([get("bm25"), get("dense")])
+            else:
+                raise ValueError(f"unknown retriever {name!r}; choose from {RETRIEVERS}")
+        return built[name]
+
+    return {n: get(n) for n in names}
+
+
+def run(data: Path, split: str, retrievers: list[str], seed: int = 0) -> dict:
     docs = load_docs(data / "corpus.jsonl")
     graph = LineageGraph(docs)
-    index = BM25([(d.doc_id, d.text) for d in docs])
+    index = build_retrievers(retrievers, [(d.doc_id, d.text) for d in docs], data)
     queries = [q for q in read_jsonl(data / "queries.jsonl") if split in ("all", q["split"])]
 
     rows = []
-    for variant in sorted({q["variant"] for q in queries}):
-        qs = [q for q in queries if q["variant"] == variant]
-        rankings = [[d for d, _ in index.search(q["text"], K)] for q in qs]
-        for policy, fn in POLICIES.items():
-            per_query = [score(fn(r, graph), q) for r, q in zip(rankings, qs, strict=True)]
-            row = {"variant": variant, "policy": policy, "n": len(qs)}
-            for m in METRICS:
-                vals = [s[m] for s in per_query]
-                row[m] = sum(vals) / len(vals) if vals else float("nan")
-                row[f"{m}_ci95"] = bootstrap_ci(vals, seed=seed)
-            rows.append(row)
+    for name, retriever in index.items():
+        for variant in sorted({q["variant"] for q in queries}):
+            qs = [q for q in queries if q["variant"] == variant]
+            hits = retriever.search_many([q["text"] for q in qs], K)
+            rankings = [[d for d, _ in h] for h in hits]
+            for policy, fn in POLICIES.items():
+                per_query = [score(fn(r, graph), q) for r, q in zip(rankings, qs, strict=True)]
+                row = {"retriever": name, "variant": variant, "policy": policy, "n": len(qs)}
+                for m in METRICS:
+                    vals = [s[m] for s in per_query]
+                    row[m] = sum(vals) / len(vals) if vals else float("nan")
+                    row[f"{m}_ci95"] = bootstrap_ci(vals, seed=seed)
+                rows.append(row)
 
     manifest = json.loads((data / "manifest.json").read_text())
     return {
         "experiment": "staleness",
-        "retriever": "bm25(k1=1.2,b=0.75)",
+        "retrievers": {n: r.name for n, r in index.items()},
         "k": K,
         "split": split,
         "seed": seed,
@@ -74,16 +100,17 @@ def run(data: Path, split: str, seed: int = 0) -> dict:
 
 def to_markdown(result: dict) -> str:
     lines = [
-        f"BM25 top-{result['k']}, split `{result['split']}`, "
+        f"Top-{result['k']}, split `{result['split']}`, "
         f"index `{result['index_sha256'][:12]}`. 95% bootstrap CI in brackets.",
         "",
-        "| query variant | policy | n | stale@1 ↓ | stale before current ↓ "
+        "| retriever | query variant | policy | n | stale@1 ↓ | stale before current ↓ "
         "| current@1 ↑ | current@10 ↑ | MRR current ↑ |",
-        "|---|---|---|---|---|---|---|---|",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for r in result["rows"]:
         cells = [f"{r[m]:.3f} [{r[m + '_ci95'][0]:.3f}, {r[m + '_ci95'][1]:.3f}]" for m in METRICS]
-        lines.append(f"| {r['variant']} | {r['policy']} | {r['n']} | " + " | ".join(cells) + " |")
+        head = f"| {r['retriever']} | {r['variant']} | {r['policy']} | {r['n']} | "
+        lines.append(head + " | ".join(cells) + " |")
     return "\n".join(lines) + "\n"
 
 
@@ -92,10 +119,11 @@ def main() -> None:
     ap.add_argument("--data", type=Path, default=Path("data/rfc"))
     ap.add_argument("--split", choices=("dev", "test", "all"), default="test")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--retrievers", default="bm25", help=f"comma-separated subset of {RETRIEVERS}")
     ap.add_argument("--out", type=Path, default=Path("results"))
     args = ap.parse_args()
 
-    result = run(args.data, args.split, args.seed)
+    result = run(args.data, args.split, args.retrievers.split(","), args.seed)
     args.out.mkdir(parents=True, exist_ok=True)
     name = f"rfc_staleness_{args.split}"
     (args.out / f"{name}.json").write_text(json.dumps(result, indent=2) + "\n")
