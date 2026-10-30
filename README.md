@@ -54,6 +54,16 @@ make questions QUESTIONS_LIMIT=50     # run from a regular terminal, not inside 
 
 The default backend is the Claude Code CLI in headless mode (`claude -p`, model `claude-sonnet-5-5`), which runs on a Claude subscription with no API key. `LLM_BACKEND=ollama LLM_MODEL=qwen2.5:7b` uses a local model instead. Every response goes into `cache/llm.sqlite`, which is committed, so `make reproduce` rebuilds the questions with `--offline` and makes no model calls. The acceptance rate and rejection reasons are written to `data/rfc/questions_manifest.json`.
 
+Prompt iterations so far, on the same seeded sample of supersession pairs:
+
+| prompt | change | accepted | what the inspection showed |
+|---|---|---|---|
+| q-v1 | baseline | 3 / 5 | 2 of 3 questions were about editorial wording ("official" status report), and they listed the answer options |
+| q-v2 | substantive change types only; no answer leaks | 6 / 20 | all substantive, but 2 "before" answers argued from silence ("the abstract mentions no support") |
+| q-v3 | answers must be positively stated | 4 / 20 | all grounded and substantive. Most pairs are skipped because the abstracts differ only editorially, so full texts are needed to scale past roughly 270 questions |
+
+Every response for all three prompt versions stays in the cache, for transparency.
+
 ### Benchmark design notes
 
 - **Supersession vs. amendment.** Only `obsoletes` counts as supersession. `updates` (partial amendment) is kept in the corpus for the conflict-aware answering work, but it doesn't make a document stale.

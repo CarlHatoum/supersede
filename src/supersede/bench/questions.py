@@ -28,7 +28,10 @@ from supersede.corpus import Doc, load_docs, write_jsonl
 from supersede.lineage import LineageGraph
 from supersede.llm import CachedLLM, CacheMiss, extract_json, make_llm
 
-PROMPT_VERSION = "q-v1"
+PROMPT_VERSION = "q-v3"
+
+# Changes worth asking about. "editorial" (status, framing, wording, document lists) is rejected.
+SUBSTANTIVE = ("value", "requirement", "mechanism", "reference", "scope")
 
 SYSTEM = (
     "You build evaluation data for retrieval systems over technical standards. "
@@ -47,17 +50,36 @@ Write ONE question that an engineer could ask without knowing either document ex
 the correct answer according to the NEWER document differs from the answer according to the OLDER \
 one. Both answers must be stated in the abstracts above, not inferred from outside knowledge.
 
+The difference must be a SUBSTANTIVE technical change, of one of these types:
+- value: a number, limit, default, identifier or format changed
+- requirement: a rule or obligation was added, removed or changed
+- mechanism: an algorithm, procedure or protocol behaviour changed
+- reference: the standard it depends on or conforms to changed
+- scope: what the specification covers changed (features added or removed)
+Editorial differences (status labels like "official", wording, framing, which memo lists what) \
+do not count. If the only differences are editorial, skip.
+
 Rules:
 - Do not mention RFC numbers, "this document", "the newer/older version", or publication dates.
 - Name the protocol or topic explicitly so the question stands alone.
+- The question must not reveal either answer or list the candidate answers.
+- Both answers must be POSITIVELY stated in their abstract. An abstract not mentioning \
+something is not evidence that the standard lacked it: never answer "none", "not covered" or \
+"not mentioned".
 - Each evidence field is copied VERBATIM from the corresponding abstract (one short span).
 - If the abstracts do not support such a question, return {{"skip": "<short reason>"}}.
 
 Return:
-{{"question": "...", "answer_current": "...", "answer_stale": "...", \
+{{"change_type": "value|requirement|mechanism|reference|scope", "question": "...", \
+"answer_current": "...", "answer_stale": "...", \
 "evidence_current": "<verbatim span from NEWER>", \
 "evidence_stale": "<verbatim span from OLDER>"}}"""
 
+# Answers argued from silence: an abstract omitting something proves nothing about the standard.
+_FROM_SILENCE = re.compile(
+    r"\babstract\b|\bnot (?:mentioned|covered|described|specified)\b|\bno mention\b|^none\b",
+    re.I,
+)
 _RFC_REF = re.compile(r"\brfc\s*-?\s*\d+|\bthis (document|memo|specification)\b", re.I)
 
 
@@ -78,8 +100,17 @@ def validate(item: dict, old: Doc, new: Doc) -> str | None:
         return "evidence_stale_not_verbatim"
     if _norm(item["answer_current"]) == _norm(item["answer_stale"]):
         return "answers_identical"
+    if item.get("change_type") not in SUBSTANTIVE:
+        return "not_substantive"
+    if any(_FROM_SILENCE.search(item[a].strip()) for a in ("answer_current", "answer_stale")):
+        return "answer_from_silence"
     if _RFC_REF.search(item["question"]):
         return "question_leaks_reference"
+    question = _norm(item["question"])
+    for answer in (item["answer_current"], item["answer_stale"]):
+        # Short answers (a value, a name) must not appear in the question itself.
+        if len(answer.split()) <= 5 and _norm(answer.rstrip(".")) in question:
+            return "question_reveals_answer"
     return None
 
 
@@ -153,6 +184,7 @@ def build(
                 "answer_stale": item["answer_stale"],
                 "evidence_current": item["evidence_current"],
                 "evidence_stale": item["evidence_stale"],
+                "change_type": item["change_type"],
                 "provenance": {"model": item["_model"], "prompt_version": PROMPT_VERSION},
             }
         )
