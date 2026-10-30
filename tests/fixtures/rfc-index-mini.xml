@@ -1,0 +1,49 @@
+<?xml version='1.0' encoding='utf-8'?>
+<rfc-index xmlns="https://www.rfc-editor.org/rfc-index">
+  <bcp-entry><doc-id>BCP1</doc-id></bcp-entry>
+  <rfc-entry>
+    <doc-id>RFC1</doc-id>
+    <title>Widget Transfer Protocol</title>
+    <date><month>May</month><year>1990</year></date>
+    <keywords><kw>widget</kw></keywords>
+    <abstract><p>Defines the widget transfer protocol.</p></abstract>
+    <obsoleted-by><doc-id>RFC2</doc-id></obsoleted-by>
+    <current-status>HISTORIC</current-status>
+  </rfc-entry>
+  <rfc-entry>
+    <doc-id>RFC2</doc-id>
+    <title>Widget Transfer Protocol Version 2</title>
+    <date><month>May</month><year>2000</year></date>
+    <abstract><p>Second version of the widget transfer protocol.</p><p>Adds  framing.</p></abstract>
+    <obsoletes><doc-id>RFC1</doc-id></obsoletes>
+    <current-status>PROPOSED STANDARD</current-status>
+  </rfc-entry>
+  <rfc-entry>
+    <doc-id>RFC3</doc-id>
+    <title>Widget Transfer Protocol Version 3</title>
+    <date><month>May</month><year>2010</year></date>
+    <obsoletes><doc-id>RFC2</doc-id><doc-id>RFC99</doc-id></obsoletes>
+    <updates><doc-id>RFC20</doc-id></updates>
+    <current-status>INTERNET STANDARD</current-status>
+  </rfc-entry>
+  <rfc-entry>
+    <doc-id>RFC10</doc-id>
+    <title>Gadget Naming</title>
+    <date><month>June</month><year>1995</year></date>
+    <obsoleted-by><doc-id>RFC11</doc-id><doc-id>RFC12</doc-id></obsoleted-by>
+  </rfc-entry>
+  <rfc-entry>
+    <doc-id>RFC11</doc-id>
+    <title>Gadget Naming Syntax</title>
+    <obsoletes><doc-id>RFC10</doc-id></obsoletes>
+  </rfc-entry>
+  <rfc-entry>
+    <doc-id>RFC12</doc-id>
+    <title>Gadget Naming Registry</title>
+    <obsoletes><doc-id>RFC10</doc-id></obsoletes>
+  </rfc-entry>
+  <rfc-entry>
+    <doc-id>RFC20</doc-id>
+    <title>Unrelated Sprocket Format</title>
+  </rfc-entry>
+</rfc-index>

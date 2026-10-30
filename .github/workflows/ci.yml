@@ -1,0 +1,17 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+          activate-environment: true
+      - run: uv pip install -e '.[dev]'
+      - run: ruff check src tests && ruff format --check src tests
+      - run: pytest -q
