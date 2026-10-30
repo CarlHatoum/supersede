@@ -52,3 +52,14 @@ def bootstrap_ci(
     lo = stats[int(alpha / 2 * n_resamples)]
     hi = stats[min(n_resamples - 1, int((1 - alpha / 2) * n_resamples))]
     return (lo, hi)
+
+
+def cohen_kappa(a: Sequence[str], b: Sequence[str]) -> float:
+    """Agreement between two raters over the same items, corrected for chance."""
+    if len(a) != len(b) or not a:
+        raise ValueError("raters must label the same, non-empty set of items")
+    n = len(a)
+    observed = sum(x == y for x, y in zip(a, b, strict=True)) / n
+    labels = set(a) | set(b)
+    expected = sum((a.count(lab) / n) * (b.count(lab) / n) for lab in labels)
+    return 1.0 if expected == 1 else (observed - expected) / (1 - expected)
