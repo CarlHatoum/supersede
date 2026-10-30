@@ -28,6 +28,7 @@ Test split, top-10, 95% bootstrap CI. "Promote" puts the current version of each
 - **This isn't a keyword-matching artefact.** Even when the query uses the *new* document's own wording, every retriever ranks a superseded version first 42–53% of the time.
 - **Hybrid fusion makes it worse.** An old version and its replacement are close under *both* lexical and semantic similarity, so rank fusion rewards whichever of them matches more consistently, and that is often the older, more widely cited one. Hybrid is still the best base once lineage is applied (current@1 0.92), because it retrieves the whole lineage chain.
 - Dropping superseded hits isn't enough (see the `filter` rows in [results/](results/)): recall is lost when the replacement was never retrieved.
+- **Natural-language questions make it worse.** On 69 LLM-written change-aware questions (see below), a superseded RFC ranks first for 56% (BM25), 55% (dense) and **65% (hybrid)** of questions [CIs ±12 pts], against 42–53% for title queries. Oracle promotion brings current@1 to 0.84–0.93. Table: [results/rfc_questions_all.md](results/rfc_questions_all.md).
 - These "promote" numbers **assume lineage metadata is available**. Real corpora rarely have it, and inferring it is the next research step.
 
 Full tables, with all metrics for both splits, are in [results/](results/).
@@ -63,6 +64,8 @@ Prompt iterations so far, on the same seeded sample of supersession pairs:
 | q-v3 | answers must be positively stated | 4 / 20 | all grounded and substantive. Most pairs are skipped because the abstracts differ only editorially, so full texts are needed to scale past roughly 270 questions |
 
 Every response for all three prompt versions stays in the cache, for transparency.
+
+**First batch (q-v3, 300 sampled pairs):** 69 accepted (23%). The model skipped 224 pairs, and the deterministic checks rejected 7 that it produced (3 non-verbatim evidence, 2 RFC-number leaks, 1 answer leak, 1 argument from silence). By change type: scope 48, mechanism 9, reference 8, requirement 3, value 1. Scope questions dominate because abstracts describe coverage more than values. Notional API price: $4.72 for 280 new calls.
 
 ### Benchmark design notes
 

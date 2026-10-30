@@ -3,7 +3,7 @@ PY ?= .venv/bin/python
 RFC_INDEX_SHA256 ?= e1669ddd5a87561fe548e737865f486e376ae58b5011a73a92a72f0aac32363a
 RETRIEVERS ?= bm25,dense,hybrid
 # Change-aware questions: how many supersession edges to try (seeded sample).
-QUESTIONS_LIMIT ?= 50
+QUESTIONS_LIMIT ?= 300
 LLM_BACKEND ?= claude-cli
 LLM_MODEL ?= claude-sonnet-5-5
 
