@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
@@ -41,8 +42,19 @@ def download(dest: Path, url: str = INDEX_URL) -> Path:
     return dest
 
 
+_HYPHENATION_HINT = re.compile(r"\\%")  # xml2rfc hyphenation hint, e.g. "\\%re-INVITE"
+# "self- organizing" is a line-break artefact; "inter- and intra-domain" is not.
+_BROKEN_HYPHEN = re.compile(r"(?<=[a-z])- (?!(?:and|or|to|nor|vs)\b)(?=[a-z])")
+
+
+def clean_text(text: str) -> str:
+    """Collapse whitespace and undo typesetting artefacts found in the index."""
+    text = " ".join(text.split())
+    return _BROKEN_HYPHEN.sub("-", _HYPHENATION_HINT.sub("", text))
+
+
 def _text(el: ET.Element | None) -> str:
-    return " ".join("".join(el.itertext()).split()) if el is not None else ""
+    return clean_text("".join(el.itertext())) if el is not None else ""
 
 
 def _ids(entry: ET.Element, tag: str) -> tuple[str, ...]:

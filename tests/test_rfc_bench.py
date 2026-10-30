@@ -60,3 +60,11 @@ def test_build_writes_consistent_artifacts(tmp_path):
     for comp in {q["component"] for q in queries}:
         assert len({q["split"] for q in queries if q["component"] == comp}) == 1
     assert json.loads((tmp_path / "manifest.json").read_text())["index_sha256"]
+
+
+def test_clean_text_undoes_typesetting_artefacts():
+    from supersede.bench.rfc import clean_text
+
+    assert clean_text("a \\%application- level  protocol") == "a application-level protocol"
+    assert clean_text("inter- and intra-domain") == "inter- and intra-domain"
+    assert clean_text("self- organizing") == "self-organizing"

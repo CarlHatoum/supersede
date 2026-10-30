@@ -65,11 +65,17 @@ def build_retrievers(
     return {n: get(n) for n in names}
 
 
-def run(data: Path, split: str, retrievers: list[str], seed: int = 0) -> dict:
+def run(
+    data: Path,
+    split: str,
+    retrievers: list[str],
+    seed: int = 0,
+    queries_file: str = "queries.jsonl",
+) -> dict:
     docs = load_docs(data / "corpus.jsonl")
     graph = LineageGraph(docs)
     index = build_retrievers(retrievers, [(d.doc_id, d.text) for d in docs], data)
-    queries = [q for q in read_jsonl(data / "queries.jsonl") if split in ("all", q["split"])]
+    queries = [q for q in read_jsonl(data / queries_file) if split in ("all", q["split"])]
 
     rows = []
     for name, retriever in index.items():
@@ -89,6 +95,7 @@ def run(data: Path, split: str, retrievers: list[str], seed: int = 0) -> dict:
     manifest = json.loads((data / "manifest.json").read_text())
     return {
         "experiment": "staleness",
+        "queries": queries_file,
         "retrievers": {n: r.name for n, r in index.items()},
         "k": K,
         "split": split,
@@ -120,12 +127,14 @@ def main() -> None:
     ap.add_argument("--split", choices=("dev", "test", "all"), default="test")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--retrievers", default="bm25", help=f"comma-separated subset of {RETRIEVERS}")
+    ap.add_argument("--queries", default="queries.jsonl", help="query file inside --data")
     ap.add_argument("--out", type=Path, default=Path("results"))
     args = ap.parse_args()
 
-    result = run(args.data, args.split, args.retrievers.split(","), args.seed)
+    result = run(args.data, args.split, args.retrievers.split(","), args.seed, args.queries)
     args.out.mkdir(parents=True, exist_ok=True)
-    name = f"rfc_staleness_{args.split}"
+    stem = Path(args.queries).stem
+    name = f"rfc_staleness_{args.split}" if stem == "queries" else f"rfc_{stem}_{args.split}"
     (args.out / f"{name}.json").write_text(json.dumps(result, indent=2) + "\n")
     md = to_markdown(result)
     (args.out / f"{name}.md").write_text(md)

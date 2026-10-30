@@ -44,6 +44,16 @@ make reproduce RFC_INDEX_SHA256=e1669ddd5a87561fe548e737865f486e376ae58b5011a73a
 
 The RFC index is a live file. The published numbers use the snapshot with the SHA-256 above, and the build fails if the hash doesn't match. A frozen copy of the snapshot will be released alongside the dataset.
 
+### Change-aware questions (LLM step)
+
+Title queries favour lexical matching, so the next query set is LLM-written questions whose correct answer *differs* between a document and its replacement. Each item carries the current and stale answers with a verbatim evidence span from each abstract, and items that fail that grounding check are rejected.
+
+```bash
+make questions QUESTIONS_LIMIT=50     # run from a regular terminal, not inside Claude Code
+```
+
+The default backend is the Claude Code CLI in headless mode (`claude -p`, model `claude-sonnet-5-5`), which runs on a Claude subscription with no API key. `LLM_BACKEND=ollama LLM_MODEL=qwen2.5:7b` uses a local model instead. Every response goes into `cache/llm.sqlite`, which is committed, so `make reproduce` rebuilds the questions with `--offline` and makes no model calls. The acceptance rate and rejection reasons are written to `data/rfc/questions_manifest.json`.
+
 ### Benchmark design notes
 
 - **Supersession vs. amendment.** Only `obsoletes` counts as supersession. `updates` (partial amendment) is kept in the corpus for the conflict-aware answering work, but it doesn't make a document stale.
@@ -58,7 +68,7 @@ The RFC index is a live file. The published numbers use the snapshot with the SH
 |---|---|
 | ✅ | v0.1: RFC lineage benchmark, BM25 baseline, oracle reranking, bootstrap CIs, CI tests |
 | ✅ | v0.2: dense and hybrid (RRF) retrievers, cached embeddings |
-| ⏭ | LLM layer with a published response cache; change-aware natural-language questions; answer-level staleness with a human-validated judge |
+| 🚧 | v0.3: LLM layer (Claude CLI, Ollama) with a published response cache; change-aware questions *(code done, generation pending)*; answer-level staleness with a human-validated judge |
 | | Librarian agent that **infers** lineage without metadata (dates, titles, NLI, semantic entropy across versions) |
 | | Contamination injector: synthetic fabricated standards and contradictions at controlled rates (dose-response) |
 | | FAA Advisory Circulars (`cancels AC xx-yyA`) and UNECE regulations (series of amendments) |
@@ -75,7 +85,9 @@ src/supersede/
   retrieval.py     BM25 (dependency-free), dense, hybrid RRF
   rerank.py        version-aware policies (none / filter / promote)
   metrics.py       stale@1, current@k, MRR, bootstrap CI
+  llm.py           LLM backends (claude -p, Ollama, mock) + SQLite response cache
   bench/rfc.py     RFC corpus + query builder
+  bench/questions.py  change-aware question generator with grounding checks
   experiments/     one module per experiment, one command each
 results/           committed outputs of `make reproduce`
 ```
