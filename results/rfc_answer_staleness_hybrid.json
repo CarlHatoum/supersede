@@ -1,0 +1,111 @@
+{
+  "experiment": "answer_staleness",
+  "retriever": "rrf(bm25(k1=1.2,b=0.75),dense(BAAI/bge-small-en-v1.5);k=60)",
+  "depth": 10,
+  "context_k": 5,
+  "answer_backend": "claude-cli:claude-sonnet-5-5",
+  "judge_backend": "claude-cli:claude-haiku-5-5",
+  "prompt_versions": {
+    "answer": "a-v1",
+    "judge": "j-v1"
+  },
+  "n_questions": 69,
+  "n_missing": 0,
+  "n_failed": 0,
+  "rows": [
+    {
+      "policy": "naive",
+      "n": 69,
+      "stale_outcome": 0.08695652173913043,
+      "stale_outcome_ci95": [
+        0.028985507246376812,
+        0.15942028985507245
+      ],
+      "current_outcome": 0.8405797101449275,
+      "current_outcome_ci95": [
+        0.7536231884057971,
+        0.9130434782608695
+      ],
+      "flagged_conflict": 0.6376811594202898,
+      "flagged_conflict_ci95": [
+        0.5217391304347826,
+        0.7391304347826086
+      ],
+      "abstain": 0.057971014492753624,
+      "abstain_ci95": [
+        0.014492753623188406,
+        0.11594202898550725
+      ]
+    },
+    {
+      "policy": "latest_only",
+      "n": 69,
+      "stale_outcome": 0.014492753623188406,
+      "stale_outcome_ci95": [
+        0.0,
+        0.043478260869565216
+      ],
+      "current_outcome": 0.8840579710144928,
+      "current_outcome_ci95": [
+        0.8115942028985508,
+        0.9565217391304348
+      ],
+      "flagged_conflict": 0.043478260869565216,
+      "flagged_conflict_ci95": [
+        0.0,
+        0.10144927536231885
+      ],
+      "abstain": 0.07246376811594203,
+      "abstain_ci95": [
+        0.014492753623188406,
+        0.13043478260869565
+      ]
+    },
+    {
+      "policy": "show_conflict",
+      "n": 69,
+      "stale_outcome": 0.0,
+      "stale_outcome_ci95": [
+        0.0,
+        0.0
+      ],
+      "current_outcome": 0.9420289855072463,
+      "current_outcome_ci95": [
+        0.8840579710144928,
+        0.9855072463768116
+      ],
+      "flagged_conflict": 0.8260869565217391,
+      "flagged_conflict_ci95": [
+        0.7391304347826086,
+        0.9130434782608695
+      ],
+      "abstain": 0.043478260869565216,
+      "abstain_ci95": [
+        0.0,
+        0.08695652173913043
+      ]
+    }
+  ],
+  "usage": {
+    "answer": {
+      "calls": 207,
+      "hits": 4,
+      "input_tokens": 268893,
+      "output_tokens": 51331,
+      "cost_usd": 2.950136749999999,
+      "models": [
+        "claude-sonnet-5-5"
+      ]
+    },
+    "judge": {
+      "calls": 207,
+      "hits": 0,
+      "input_tokens": 147056,
+      "output_tokens": 52999,
+      "cost_usd": 2.2430399999999997,
+      "models": [
+        "claude-haiku-5-5"
+      ]
+    }
+  }
+}
