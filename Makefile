@@ -7,7 +7,7 @@ QUESTIONS_LIMIT ?= 300
 LLM_BACKEND ?= claude-cli
 LLM_MODEL ?= claude-sonnet-5-5
 
-.PHONY: install test lint data questions reproduce
+.PHONY: install test lint data questions answers lineage reproduce
 
 install:
 	uv venv -p 3.12 .venv && uv pip install --python $(PY) -e '.[dev,dense]'
@@ -34,3 +34,10 @@ reproduce: data
 	  $(PY) -m supersede.bench.questions --data data/rfc --backend $(LLM_BACKEND) --model $(LLM_MODEL) --limit $(QUESTIONS_LIMIT) --offline && \
 	  $(PY) -m supersede.experiments.staleness --data data/rfc --split all --retrievers $(RETRIEVERS) --queries questions.jsonl; \
 	fi
+
+# Answers (Sonnet) + judge (Haiku) on the change-aware questions. Resumes from the cache.
+answers:
+	$(PY) -m supersede.experiments.answer_staleness --data data/rfc --retriever hybrid --backend $(LLM_BACKEND) --model $(LLM_MODEL) --judge-model claude-haiku-5-5
+
+lineage:
+	$(PY) -m supersede.experiments.lineage_inference --data data/rfc
