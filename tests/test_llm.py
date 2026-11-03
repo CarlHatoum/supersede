@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from supersede.llm import CachedLLM, CacheMiss, ClaudeCLI, MockLLM, extract_json
+from supersede.llm import CachedLLM, CacheMiss, ClaudeCLI, LLMError, MockLLM, extract_json
 
 
 def test_cache_hits_and_offline(tmp_path):
@@ -54,8 +54,15 @@ def test_claude_cli_parse():
         15,
         7,
     )
-    with pytest.raises(RuntimeError):
-        ClaudeCLI.parse(json.dumps({"is_error": True, "result": "rate limited"}), "m")
+    with pytest.raises(LLMError) as e:
+        ClaudeCLI.parse(json.dumps({"is_error": True, "result": "API Error: rate limit"}), "m", 1)
+    assert e.value.transient
+    version = json.dumps({"is_error": True, "result": "400 invalid_request_error: version too old"})
+    with pytest.raises(LLMError, match="version too old") as e:
+        ClaudeCLI.parse(version, "m", 1)
+    assert not e.value.transient
+    with pytest.raises(LLMError, match="boom"):
+        ClaudeCLI.parse("", "m", 1, stderr="boom")
 
 
 def test_claude_cli_refuses_inside_claude_code(monkeypatch):

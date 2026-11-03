@@ -26,7 +26,7 @@ from pathlib import Path
 
 from supersede.corpus import Doc, load_docs, write_jsonl
 from supersede.lineage import LineageGraph
-from supersede.llm import CachedLLM, CacheMiss, extract_json, make_llm
+from supersede.llm import CachedLLM, CacheMiss, LLMError, extract_json, make_llm
 
 PROMPT_VERSION = "q-v3"
 
@@ -158,6 +158,8 @@ def build(
             item, status = generate_one(llm, by_id[edge[0]], by_id[edge[1]])
         except CacheMiss:
             return edge, None, "cache_miss"
+        except LLMError:
+            return edge, None, "llm_error"
         return edge, item, status
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -189,7 +191,7 @@ def build(
             }
         )
     questions.sort(key=lambda q: q["qid"])
-    attempted = len(edges) - reasons.get("cache_miss", 0)
+    attempted = len(edges) - reasons.get("cache_miss", 0) - reasons.get("llm_error", 0)
     stats = {
         "prompt_version": PROMPT_VERSION,
         "backend": llm.name,

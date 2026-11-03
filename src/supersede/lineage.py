@@ -95,3 +95,15 @@ class LineageGraph:
                 seen |= comp
                 out.append(comp)
         return out
+
+    @classmethod
+    def from_edges(cls, docs: Iterable[Doc], edges: Iterable[tuple[str, str]]) -> LineageGraph:
+        """A graph over ``docs`` whose only supersession links are ``edges`` (old, new)."""
+        from dataclasses import replace
+
+        succ: dict[str, list[str]] = defaultdict(list)
+        for old, new in edges:
+            succ[old].append(new)
+        return cls(
+            replace(d, obsoletes=(), obsoleted_by=tuple(succ.get(d.doc_id, ()))) for d in docs
+        )

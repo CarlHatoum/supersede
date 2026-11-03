@@ -24,6 +24,7 @@ import sqlite3
 import subprocess
 import tempfile
 import threading
+import time
 import urllib.request
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
@@ -50,6 +51,22 @@ class LLM(Protocol):
 
 class CacheMiss(RuntimeError):
     pass
+
+
+class LLMError(RuntimeError):
+    """A model call failed. ``transient`` errors (rate limits, overload) are worth retrying."""
+
+    def __init__(self, message: str, transient: bool = False):
+        super().__init__(message)
+        self.transient = transient
+
+
+_TRANSIENT = ("rate limit", "rate_limit", "overloaded", "529", "timeout", "temporarily")
+
+
+def _is_transient(message: str) -> bool:
+    m = message.lower()
+    return any(t in m for t in _TRANSIENT) and "invalid_request_error" not in m
 
 
 class ClaudeCLI:
@@ -87,19 +104,39 @@ class ClaudeCLI:
             cmd += ["--system-prompt", system]
         if params.get("effort"):
             cmd += ["--effort", params["effort"]]
-        with tempfile.TemporaryDirectory() as cwd:
-            proc = subprocess.run(
-                cmd, input=prompt, capture_output=True, text=True, timeout=self.timeout, cwd=cwd
-            )
-        if proc.returncode != 0:
-            raise RuntimeError(f"claude -p failed ({proc.returncode}): {proc.stderr.strip()[:500]}")
-        return self.parse(proc.stdout, self.model)
+        for attempt in range(self.RETRIES + 1):
+            try:
+                with tempfile.TemporaryDirectory() as cwd:
+                    proc = subprocess.run(
+                        cmd,
+                        input=prompt,
+                        capture_output=True,
+                        text=True,
+                        timeout=self.timeout,
+                        cwd=cwd,
+                    )
+                return self.parse(proc.stdout, self.model, proc.returncode, proc.stderr)
+            except (LLMError, subprocess.TimeoutExpired) as e:
+                transient = isinstance(e, subprocess.TimeoutExpired) or e.transient
+                if not transient or attempt == self.RETRIES:
+                    raise
+                time.sleep(self.BACKOFF_S * (attempt + 1))
+        raise AssertionError("unreachable")
+
+    RETRIES = 2
+    BACKOFF_S = 20
 
     @staticmethod
-    def parse(stdout: str, model: str) -> Completion:
-        out = json.loads(stdout)
-        if out.get("is_error") or out.get("subtype", "success") != "success":
-            raise RuntimeError(f"claude -p returned an error: {str(out.get('result'))[:500]}")
+    def parse(stdout: str, model: str, returncode: int = 0, stderr: str = "") -> Completion:
+        # On failure the CLI still writes its JSON result to stdout; the reason is in "result".
+        try:
+            out = json.loads(stdout)
+        except json.JSONDecodeError:
+            detail = (stderr or stdout).strip()[:500]
+            raise LLMError(f"claude -p failed ({returncode}): {detail}", transient=True) from None
+        if returncode != 0 or out.get("is_error") or out.get("subtype", "success") != "success":
+            msg = str(out.get("result"))[:500]
+            raise LLMError(f"claude -p returned an error: {msg}", transient=_is_transient(msg))
         usage = out.get("usage") or {}
         models = list((out.get("modelUsage") or {}).keys())
         return Completion(

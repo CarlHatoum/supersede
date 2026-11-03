@@ -27,7 +27,7 @@ from supersede import judge as judge_mod
 from supersede.corpus import load_docs, read_jsonl, write_jsonl
 from supersede.experiments.staleness import RETRIEVERS, build_retrievers
 from supersede.lineage import LineageGraph
-from supersede.llm import CacheMiss, make_llm
+from supersede.llm import CacheMiss, LLMError, make_llm
 from supersede.metrics import bootstrap_ci, cohen_kappa
 
 DEPTH = 10  # documents retrieved before the answer policy picks its context
@@ -50,7 +50,9 @@ def run(data: Path, retriever: str, llm, judge_llm, workers: int = 2, seed: int 
             a = answer_mod.answer(llm, q["text"], ranking, by_id, graph, policy, CONTEXT_K)
             v = judge_mod.judge(judge_llm, q, a.text)
         except CacheMiss:
-            return {**item, "label": None}
+            return {**item, "label": None, "error": "cache_miss"}
+        except LLMError as e:
+            return {**item, "label": None, "error": str(e)[:300]}
         stale_in_ctx = any(d in set(q["stale"]) for d in a.context_ids)
         return {
             **item,
@@ -93,7 +95,8 @@ def run(data: Path, retriever: str, llm, judge_llm, workers: int = 2, seed: int 
         "judge_backend": judge_llm.name,
         "prompt_versions": {"answer": answer_mod.PROMPT_VERSION, "judge": judge_mod.PROMPT_VERSION},
         "n_questions": len(questions),
-        "n_missing": len(items) - len(done),
+        "n_missing": sum(i.get("error") == "cache_miss" for i in items),
+        "n_failed": sum(i["label"] is None and i.get("error") != "cache_miss" for i in items),
         "rows": rows,
         "usage": {"answer": llm.stats.as_dict(), "judge": judge_llm.stats.as_dict()},
         "items": items,
