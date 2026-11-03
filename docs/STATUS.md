@@ -27,6 +27,13 @@ _Last updated: 2026-11-03_
 
 **Talk:** AI Tinkerers Paris, 7 December 2026. The agent and a minimal Cloud Run deployment must be demo-ready. Schedule: `~/.claude/plans/give-me-open-source-bright-eagle.md`.
 
+## Librarian agent (started 2026-11-03)
+- `serve/mcp_server.py`: MCP server (stdio) with `search`, `read_doc` and `compare`. No lineage metadata is exposed.
+- `librarian/agent.py`: LangGraph graph triage → investigate ⇄ tools → decide, with structured verdicts.
+- **First end-to-end run** (local Qwen 3.5 9.7B via Ollama, tools over MCP): RFC 2581 → RFC 5681 judged `supersedes` (0.95) after read_doc ×2 and compare. About 2 min per pair locally.
+- **Leak found:** the masked setting hides numbers but keeps sentences like "This document obsoletes [REF]", and the agent used that cue. Add a `strict` setting that removes supersession sentences before evaluating.
+- **Next:** response caching for agent calls, the strict setting, then an evaluation harness (cascade on uncertain test pairs vs logreg vs oracle). Mistral once the key is in. The machine has 16 GB of RAM, so Mistral Small can't run locally; Qwen 3.5 9.7B is the local baseline.
+
 ## Resume
 LLM calls go through `claude -p` on the Claude plan. From a regular terminal:
 

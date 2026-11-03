@@ -10,7 +10,7 @@ LLM_MODEL ?= claude-sonnet-5-5
 .PHONY: install test lint data questions answers lineage reproduce
 
 install:
-	uv venv -p 3.12 .venv && uv pip install --python $(PY) -e '.[dev,dense]'
+	uv venv -p 3.12 .venv && uv pip install --python $(PY) -e '.[dev,dense,agent]'
 
 test:
 	$(PY) -m pytest -q
