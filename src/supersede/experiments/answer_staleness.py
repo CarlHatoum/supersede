@@ -6,17 +6,19 @@ the answer against the current and superseded references. Writes
 
 Judge validation: ``--export-labeling N`` writes a seeded sample of N items to
 label by hand. Fill each ``human_label`` with a value from ``judge.LABELS``,
-then ``--kappa FILE`` reports judge-vs-human agreement.
+then ``--kappa FILE`` reports judge-vs-human agreement. The export is a CSV to fill in
+a spreadsheet; the column ``human_label`` takes one label per row.
 
 Usage (LLM calls: run from a regular terminal, or add --offline):
     python -m supersede.experiments.answer_staleness --data data/rfc --retriever hybrid
     python -m supersede.experiments.answer_staleness --export-labeling 100
-    python -m supersede.experiments.answer_staleness --kappa results/labels.jsonl
+    python -m supersede.experiments.answer_staleness --kappa results/<name>_to_label.csv
 """
 
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import random
 from concurrent.futures import ThreadPoolExecutor
@@ -135,20 +137,40 @@ def to_markdown(result: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+LABEL_COLUMNS = ("qid", "policy", "question", "answer_current", "answer_stale", "answer")
+
+
 def export_labeling(items_path: Path, n: int, out: Path, seed: int = 0) -> int:
+    """A seeded sample to label by hand, as CSV (spreadsheet) or JSONL, chosen by suffix.
+
+    The judge's label is withheld so that it can't anchor the human rater.
+    """
     items = [i for i in read_jsonl(items_path) if i.get("label")]
     random.Random(seed).shuffle(items)
-    # The judge's label is withheld so that it can't anchor the human rater.
-    keep = ("qid", "policy", "question", "answer_current", "answer_stale", "answer")
-    return write_jsonl(out, ({**{k: i[k] for k in keep}, "human_label": ""} for i in items[:n]))
+    rows = [{**{k: i[k] for k in LABEL_COLUMNS}, "human_label": ""} for i in items[:n]]
+    if out.suffix == ".csv":
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with out.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=[*LABEL_COLUMNS, "human_label"])
+            writer.writeheader()
+            writer.writerows(rows)
+        return len(rows)
+    return write_jsonl(out, rows)
+
+
+def read_labels(path: Path) -> list[dict]:
+    if path.suffix == ".csv":
+        with path.open(newline="", encoding="utf-8-sig") as f:
+            return list(csv.DictReader(f))
+    return list(read_jsonl(path))
 
 
 def kappa(labels_path: Path, items_path: Path) -> dict:
     judged = {(i["qid"], i["policy"]): i["label"] for i in read_jsonl(items_path)}
     pairs = [
-        (row["human_label"], judged[(row["qid"], row["policy"])])
-        for row in read_jsonl(labels_path)
-        if row.get("human_label") in judge_mod.LABELS
+        (row["human_label"].strip(), judged[(row["qid"], row["policy"])])
+        for row in read_labels(labels_path)
+        if row.get("human_label", "").strip() in judge_mod.LABELS
     ]
     human, model = [p[0] for p in pairs], [p[1] for p in pairs]
     return {
@@ -181,7 +203,7 @@ def main() -> None:
     name = f"rfc_answer_staleness_{args.retriever}" + ("_blind" if args.blind else "")
     items_path = args.out / f"{name}_items.jsonl"
     if args.export_labeling:
-        out = args.out / f"{name}_to_label.jsonl"
+        out = args.out / f"{name}_to_label.csv"
         print(f"wrote {export_labeling(items_path, args.export_labeling, out)} items to {out}")
         return
     if args.kappa:

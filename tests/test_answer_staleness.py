@@ -53,3 +53,38 @@ def test_run_export_and_kappa(tmp_path):
     judged = {(i["qid"], i["policy"]): i["label"] for i in result["items"]}
     write_jsonl(out, [{**r, "human_label": judged[(r["qid"], r["policy"])]} for r in rows])
     assert exp.kappa(out, items_path)["accuracy"] == 1.0
+
+
+def test_export_csv_roundtrip(tmp_path):
+    import csv
+
+    items = tmp_path / "items.jsonl"
+    write_jsonl(
+        items,
+        [
+            {
+                "qid": f"q{i}",
+                "policy": "naive",
+                "question": "Q, with comma",
+                "answer_current": "a",
+                "answer_stale": "b",
+                "answer": 'says "a"',
+                "label": lab,
+            }
+            for i, lab in enumerate(["current", "stale", "current"])
+        ],
+    )
+    out = tmp_path / "to_label.csv"
+    assert exp.export_labeling(items, 3, out) == 3
+    with out.open(newline="") as f:
+        rows = list(csv.DictReader(f))
+    assert {r["qid"] for r in rows} == {"q0", "q1", "q2"}
+    assert rows[0]["question"] == "Q, with comma" and "label" not in rows[0]
+    gold = {"q0": "current", "q1": "stale", "q2": "current"}
+    for r in rows:
+        r["human_label"] = gold[r["qid"]]
+    with out.open("w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w.writeheader()
+        w.writerows(rows)
+    assert exp.kappa(out, items) == {"n": 3, "kappa": 1.0, "accuracy": 1.0}
