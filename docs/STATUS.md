@@ -17,6 +17,16 @@ _Last updated: 2026-11-03_
   - Closes 61% (declared) / 51% (masked) of the no-lineage → oracle current@1 gap on title queries.
   - See `results/rfc_lineage_inference.md`.
 
+## Agent stack (locked 2026-11-03)
+- **LangGraph** librarian agent (triage → investigate → decide), with tools served by an **MCP server** (`search`, `read_doc`, `compare`).
+- **Mistral** (hosted) as the main agent model. **Needs a Mistral API key from the user.**
+- **Ollama** open-weight baseline (Mistral Small or Qwen).
+- **A2A** interface added in deployment.
+- **Claude** only for question generation and judging (already cached). Never as the agent.
+- **Cascade:** logreg (librarian v0) handles the clear pairs; the agent investigates the uncertain ones.
+
+**Talk:** AI Tinkerers Paris, 7 December 2026. The agent and a minimal Cloud Run deployment must be demo-ready. Schedule: `~/.claude/plans/give-me-open-source-bright-eagle.md`.
+
 ## Resume
 LLM calls go through `claude -p` on the Claude plan. From a regular terminal:
 
@@ -36,7 +46,7 @@ Then:
 2. ~~Blind ablation~~ (done). Optional: separate years-only vs cues-only ablations, and a weaker local model for contrast.
 3. Export labels: `.venv/bin/python -m supersede.experiments.answer_staleness --export-labeling 100`. The user labels them; then run `--kappa <file>`.
 4. Decide whether to generate questions for the remaining 1,052 pairs (about $17 notional).
-5. Librarian next: LLM pairwise judge, then the agentic librarian, both compared against the logreg baseline.
+5. Librarian next: MCP server, then the LangGraph agent (Ollama first, Mistral once the key is in), evaluated against the logreg baseline and the oracle.
 
 ## Clearance
 - **employer approval received (2026-11-03).** Thesis supervisor sign-off: not yet confirmed. Ask before pushing.
