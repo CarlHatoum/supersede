@@ -64,3 +64,22 @@ def test_cohen_kappa():
     assert cohen_kappa(["a"], ["a"]) == 1.0
     with pytest.raises(ValueError):
         cohen_kappa(["a"], [])
+
+
+def test_blind_context_hides_version_cues_and_maps_citations_back():
+    docs = {
+        **DOCS,
+        "A2": Doc("A2", "Widget protocol v2", "Uses TCP. Obsoletes RFC 1.", year=2000),
+    }
+    seen = []
+
+    def respond(system, prompt):
+        seen.append(prompt)
+        return json.dumps({"answer": "TCP", "citations": ["D1", "A2"]})
+
+    a = answer(MockLLM(respond), Q["text"], ["A1", "B"], docs, GRAPH, "show_conflict", blind=True)
+    prompt = seen[-1]
+    assert "(2000)" not in prompt and "RFC 1" not in prompt and "[REF]" in prompt
+    assert "[D1] Widget protocol v2" in prompt and "SUPERSEDED by D1" in prompt
+    assert "[A2]" not in prompt
+    assert a.citations == ("A2",)  # D1 maps back; the raw ID "A2" is not a label

@@ -34,7 +34,15 @@ DEPTH = 10  # documents retrieved before the answer policy picks its context
 CONTEXT_K = 5
 
 
-def run(data: Path, retriever: str, llm, judge_llm, workers: int = 2, seed: int = 0) -> dict:
+def run(
+    data: Path,
+    retriever: str,
+    llm,
+    judge_llm,
+    workers: int = 2,
+    seed: int = 0,
+    blind: bool = False,
+) -> dict:
     docs = load_docs(data / "corpus.jsonl")
     by_id = {d.doc_id: d for d in docs}
     graph = LineageGraph(docs)
@@ -47,7 +55,9 @@ def run(data: Path, retriever: str, llm, judge_llm, workers: int = 2, seed: int 
         item = {"qid": q["qid"], "policy": policy, "question": q["text"]}
         item.update(answer_current=q["answer_current"], answer_stale=q["answer_stale"])
         try:
-            a = answer_mod.answer(llm, q["text"], ranking, by_id, graph, policy, CONTEXT_K)
+            a = answer_mod.answer(
+                llm, q["text"], ranking, by_id, graph, policy, CONTEXT_K, blind=blind
+            )
             v = judge_mod.judge(judge_llm, q, a.text)
         except CacheMiss:
             return {**item, "label": None, "error": "cache_miss"}
@@ -88,6 +98,7 @@ def run(data: Path, retriever: str, llm, judge_llm, workers: int = 2, seed: int 
 
     return {
         "experiment": "answer_staleness",
+        "blind": blind,
         "retriever": index.name,
         "depth": DEPTH,
         "context_k": CONTEXT_K,
@@ -106,7 +117,9 @@ def run(data: Path, retriever: str, llm, judge_llm, workers: int = 2, seed: int 
 def to_markdown(result: dict) -> str:
     lines = [
         f"{result['n_questions']} change-aware questions, retriever `{result['retriever']}`, "
-        f"context top-{result['context_k']}. Answers by `{result['answer_backend']}`, "
+        f"context top-{result['context_k']}"
+        + (" (**blind**: no years, RFC numbers masked, neutral labels)" if result["blind"] else "")
+        + f". Answers by `{result['answer_backend']}`, "
         f"judged by `{result['judge_backend']}` (not yet validated against human labels). "
         "95% bootstrap CI in brackets.",
         "",
@@ -156,11 +169,16 @@ def main() -> None:
     ap.add_argument("--offline", action="store_true")
     ap.add_argument("--workers", type=int, default=2)
     ap.add_argument("--out", type=Path, default=Path("results"))
+    ap.add_argument(
+        "--blind",
+        action="store_true",
+        help="hide years, mask RFC numbers and use neutral doc labels in the answer context",
+    )
     ap.add_argument("--export-labeling", type=int, metavar="N")
     ap.add_argument("--kappa", type=Path, metavar="LABELS_JSONL")
     args = ap.parse_args()
 
-    name = f"rfc_answer_staleness_{args.retriever}"
+    name = f"rfc_answer_staleness_{args.retriever}" + ("_blind" if args.blind else "")
     items_path = args.out / f"{name}_items.jsonl"
     if args.export_labeling:
         out = args.out / f"{name}_to_label.jsonl"
@@ -172,7 +190,7 @@ def main() -> None:
 
     llm = make_llm(args.backend, args.model, args.cache, args.offline)
     judge_llm = make_llm(args.backend, args.judge_model or args.model, args.cache, args.offline)
-    result = run(args.data, args.retriever, llm, judge_llm, args.workers)
+    result = run(args.data, args.retriever, llm, judge_llm, args.workers, blind=args.blind)
     args.out.mkdir(parents=True, exist_ok=True)
     write_jsonl(items_path, result.pop("items"))
     (args.out / f"{name}.json").write_text(json.dumps(result, indent=2) + "\n")

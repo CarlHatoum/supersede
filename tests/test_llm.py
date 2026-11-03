@@ -69,3 +69,24 @@ def test_claude_cli_refuses_inside_claude_code(monkeypatch):
     monkeypatch.setenv("CLAUDECODE", "1")
     with pytest.raises(RuntimeError, match="regular terminal"):
         ClaudeCLI().complete("hi")
+
+
+def test_concurrent_identical_prompts_make_one_call(tmp_path):
+    import threading
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    counter = {"n": 0}
+    guard = threading.Lock()
+
+    def respond(system, prompt):
+        with guard:
+            counter["n"] += 1
+            n = counter["n"]
+        time.sleep(0.05)
+        return f"response {n}"
+
+    llm = CachedLLM(MockLLM(respond), tmp_path / "c.sqlite")
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        texts = list(pool.map(lambda _: llm.complete("same").text, range(4)))
+    assert counter["n"] == 1 and set(texts) == {"response 1"}

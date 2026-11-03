@@ -215,6 +215,8 @@ class CachedLLM:
         self.stats = UsageStats()
         path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        # One lock per key: concurrent requests for the same prompt make a single call.
+        self._key_locks: dict[str, threading.Lock] = {}
         self._db = sqlite3.connect(path, check_same_thread=False)
         self._db.execute(
             "CREATE TABLE IF NOT EXISTS responses ("
@@ -231,32 +233,36 @@ class CachedLLM:
     def complete(self, prompt: str, system: str = "", **params) -> Completion:
         k = self.key(self.inner.name, system, prompt, params)
         with self._lock:
-            row = self._db.execute(
-                "SELECT completion FROM responses WHERE key = ?", (k,)
-            ).fetchone()
-        if row is not None:
-            c = Completion(**{**json.loads(row[0]), "cached": True})
-            self._account(c, hit=True)
+            key_lock = self._key_locks.setdefault(k, threading.Lock())
+        with key_lock:
+            with self._lock:
+                row = self._db.execute(
+                    "SELECT completion FROM responses WHERE key = ?", (k,)
+                ).fetchone()
+            if row is not None:
+                c = Completion(**{**json.loads(row[0]), "cached": True})
+                self._account(c, hit=True)
+                return c
+            if self.offline:
+                raise CacheMiss(f"no cached response for key {k[:12]} ({self.inner.name})")
+            c = self.inner.complete(prompt, system, **params)
+            with self._lock:
+                # First write wins, so a stored response never changes under a published result.
+                self._db.execute(
+                    "INSERT OR IGNORE INTO responses VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        k,
+                        self.inner.name,
+                        system,
+                        prompt,
+                        json.dumps(params, sort_keys=True),
+                        json.dumps(asdict(c)),
+                        datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    ),
+                )
+                self._db.commit()
+            self._account(c, hit=False)
             return c
-        if self.offline:
-            raise CacheMiss(f"no cached response for key {k[:12]} ({self.inner.name})")
-        c = self.inner.complete(prompt, system, **params)
-        with self._lock:
-            self._db.execute(
-                "INSERT OR REPLACE INTO responses VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    k,
-                    self.inner.name,
-                    system,
-                    prompt,
-                    json.dumps(params, sort_keys=True),
-                    json.dumps(asdict(c)),
-                    datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                ),
-            )
-            self._db.commit()
-        self._account(c, hit=False)
-        return c
 
     def _account(self, c: Completion, hit: bool) -> None:
         with self._lock:
