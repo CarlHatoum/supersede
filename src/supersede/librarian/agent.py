@@ -227,7 +227,7 @@ def main() -> None:
     ap.add_argument("new")
     ap.add_argument("--model", default="ollama:edtorre/qwen3.5-hermes")
     ap.add_argument("--data", default="data/rfc")
-    ap.add_argument("--setting", choices=("masked", "declared"), default="masked")
+    ap.add_argument("--setting", choices=("declared", "masked", "strict"), default="strict")
     ap.add_argument("--mcp", action="store_true", help="fetch tools from the MCP server")
     ap.add_argument("--max-steps", type=int, default=8)
     asyncio.run(_main(ap.parse_args()))

@@ -77,3 +77,10 @@ def test_lineage_from_edges():
     g = LineageGraph.from_edges([OLD, NEW], [("RFC2581", "RFC5681")])
     assert g.current_versions("RFC2581") == {"RFC5681"}
     assert LineageGraph.from_edges([OLD, NEW], []).edges == []
+
+
+def test_strict_setting_drops_supersession_sentences():
+    strict = masking.apply([NEW], "strict")[0]
+    assert strict.abstract == "Specifies four algorithms."
+    text = "Defines X. Replaces the old Y; keeps Z."
+    assert masking.strip_supersession(text) == "Defines X. keeps Z."

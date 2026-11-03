@@ -162,5 +162,87 @@
         }
       }
     }
+  },
+  {
+    "setting": "strict",
+    "n_candidate_pairs": 120390,
+    "candidate_recall": 0.8930654569021387,
+    "methods": {
+      "heuristic": {
+        "edges": {
+          "precision": 0.28633540372670807,
+          "recall": 0.4436958614051973,
+          "f1": 0.3480558701396753,
+          "tp": 461
+        }
+      },
+      "logreg": {
+        "edges": {
+          "precision": 0.5955710955710956,
+          "recall": 0.4918190567853705,
+          "f1": 0.5387453874538745,
+          "tp": 511
+        },
+        "threshold": 0.94,
+        "weights": {
+          "title_jaccard": 0.577,
+          "title_cos": -0.065,
+          "text_cos": 0.756,
+          "year_gap": -0.173,
+          "same_year": -0.204,
+          "version_cue": 0.013,
+          "keyword_jaccard": 0.272,
+          "inv_rank": 0.549,
+          "explicit_cue": 0.0,
+          "mentions_old": 0.096
+        }
+      }
+    },
+    "downstream": {
+      "title queries": {
+        "no_lineage": {
+          "current@1": 0.24751819986763732,
+          "stale@1": 0.6776968894771674,
+          "gap_closed": 0.0
+        },
+        "heuristic": {
+          "current@1": 0.5393778954334878,
+          "stale@1": 0.25479814692256786,
+          "gap_closed": 0.43066406250000006
+        },
+        "logreg": {
+          "current@1": 0.5936465916611515,
+          "stale@1": 0.30377233620119126,
+          "gap_closed": 0.5107421874999999
+        },
+        "oracle": {
+          "current@1": 0.9252150893448048,
+          "stale@1": 0.0,
+          "gap_closed": 1.0
+        }
+      },
+      "questions": {
+        "no_lineage": {
+          "current@1": 0.20408163265306123,
+          "stale@1": 0.7142857142857143,
+          "gap_closed": 0.0
+        },
+        "heuristic": {
+          "current@1": 0.5714285714285714,
+          "stale@1": 0.1836734693877551,
+          "gap_closed": 0.5142857142857142
+        },
+        "logreg": {
+          "current@1": 0.5510204081632653,
+          "stale@1": 0.3469387755102041,
+          "gap_closed": 0.4857142857142856
+        },
+        "oracle": {
+          "current@1": 0.9183673469387755,
+          "stale@1": 0.0,
+          "gap_closed": 1.0
+        }
+      }
+    }
   }
 ]

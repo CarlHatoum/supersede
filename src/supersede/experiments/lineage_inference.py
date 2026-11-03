@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 from supersede.bench.rfc import split_of
@@ -83,12 +84,44 @@ def downstream(rankings, queries, graphs: dict[str, LineageGraph | None]) -> dic
     return out
 
 
-def run_setting(setting: str, data: Path, docs_orig, gold: LineageGraph, rankings) -> dict:
+@dataclass
+class CheapScores:
+    """Librarian v0 on one setting: candidate pairs, labels, splits and fitted scores."""
+
+    setting: str
+    pairs: list[tuple[str, str]]
+    feats: list[dict[str, float]]
+    y: list[int]
+    split: list[str]
+    proba: list[float]
+    threshold: float
+    model: LogisticRegression
+
+
+def cheap_scores(setting: str, data: Path, docs_orig, gold: LineageGraph) -> CheapScores:
     docs = masking.apply(docs_orig, setting)
     pairs, feats = candidates(docs, data)
     gold_edges = set(gold.edges)
     y = [int(p in gold_edges) for p in pairs]
     split = [split_of(gold.component(old)) for old, _ in pairs]
+    dev = [i for i, s in enumerate(split) if s == "dev"]
+    model = LogisticRegression().fit([feats[i] for i in dev], [y[i] for i in dev])
+    proba = model.predict_proba(feats)
+    gold_dev = {e for e in gold_edges if split_of(gold.component(e[0])) == "dev"}
+
+    def dev_f1(t: float) -> float:
+        predicted = select_edges(pairs, proba, t)
+        pred = {e for e in predicted if split_of(gold.component(e[0])) == "dev"}
+        return edge_prf(pred, gold_dev)["f1"]
+
+    best_t = max(THRESHOLDS, key=dev_f1)
+    return CheapScores(setting, pairs, feats, y, split, proba, best_t, model)
+
+
+def run_setting(setting: str, data: Path, docs_orig, gold: LineageGraph, rankings) -> dict:
+    cs = cheap_scores(setting, data, docs_orig, gold)
+    pairs, feats = cs.pairs, cs.feats
+    gold_edges = set(gold.edges)
     gold_split = {e: split_of(gold.component(e[0])) for e in gold_edges}
 
     def evaluate(scores, threshold, which="test"):
@@ -108,10 +141,7 @@ def run_setting(setting: str, data: Path, docs_orig, gold: LineageGraph, ranking
     heur = [heuristic_score(f) for f in feats]
     predicted_h, prf_h = evaluate(heur, 0.5)
 
-    dev = [i for i, s in enumerate(split) if s == "dev"]
-    model = LogisticRegression().fit([feats[i] for i in dev], [y[i] for i in dev])
-    proba = model.predict_proba(feats)
-    best_t = max(THRESHOLDS, key=lambda t: evaluate(proba, t, "dev")[1]["f1"])
+    proba, best_t, model = cs.proba, cs.threshold, cs.model
     predicted_lr, prf_lr = evaluate(proba, best_t)
 
     result["methods"]["heuristic"] = {"edges": prf_h}
@@ -166,7 +196,7 @@ def to_markdown(results: list[dict]) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     ap.add_argument("--data", type=Path, default=Path("data/rfc"))
-    ap.add_argument("--settings", default="declared,masked")
+    ap.add_argument("--settings", default="declared,masked,strict")
     ap.add_argument("--out", type=Path, default=Path("results"))
     args = ap.parse_args()
 

@@ -17,3 +17,12 @@ Lineage inferred without metadata. Edge scores on test-split pairs; downstream i
 | heuristic | 0.288 | 0.449 | 0.351 | 0.543 (44%) | 0.592 (54%) |
 | logreg | 0.593 | 0.481 | 0.531 | 0.594 (51%) | 0.551 (49%) |
 | oracle | – | – | – | 0.925 (100%) | 0.918 (100%) |
+
+**strict**: 120390 candidate pairs, candidate recall 0.893
+
+| method | edge P | edge R | edge F1 | title queries: current@1 (gap closed) | questions: current@1 (gap closed) |
+|---|---|---|---|---|---|
+| no_lineage | – | – | – | 0.248 (0%) | 0.204 (0%) |
+| heuristic | 0.286 | 0.444 | 0.348 | 0.539 (43%) | 0.571 (51%) |
+| logreg | 0.596 | 0.492 | 0.539 | 0.594 (51%) | 0.551 (49%) |
+| oracle | – | – | – | 0.925 (100%) | 0.918 (100%) |

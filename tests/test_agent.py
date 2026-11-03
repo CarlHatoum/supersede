@@ -134,3 +134,24 @@ def test_step_budget_forces_a_decision():
     graph = build_librarian(model, corpus_langchain_tools(corpus()), max_steps=2)
     state = run(graph, score=None)
     assert state["decision"]["label"] == "conflicts" and state["decision"]["steps"] == 2
+
+
+def test_band_sampling_and_rates():
+    from types import SimpleNamespace
+
+    from supersede.experiments.agent_lineage import est_precision, rates, sample_band
+
+    cs = SimpleNamespace(
+        pairs=[("a", str(i)) for i in range(8)],
+        y=[1, 0, 1, 0, 0, 0, 1, 0],
+        split=["test"] * 7 + ["dev"],
+        proba=[0.85, 0.85, 0.95, 0.95, 0.5, 0.99, 0.9, 0.9],
+    )
+    picked, prior = sample_band(cs, 0.8, 0.98, n=4, seed=0)
+    # Band = test pairs 0, 1, 2, 3, 6 (pair 7 is dev; 4 and 5 are outside).
+    assert prior == 3 / 5
+    assert sum(p["gold"] for p in picked) == 2 and len(picked) == 4
+    rows = [{"gold": 1, "x": True}, {"gold": 1, "x": False}, {"gold": 0, "x": False}]
+    m = rates(rows, lambda r: r["x"])
+    assert m == {"tpr": 0.5, "tnr": 1.0, "balanced_accuracy": 0.75}
+    assert est_precision(0.5, 1.0, 0.1) == 1.0

@@ -5,7 +5,7 @@ Run over stdio (what agents and IDEs launch):
 
 Configuration via environment variables:
     SUPERSEDE_DATA     corpus directory (default: data/rfc)
-    SUPERSEDE_SETTING  "masked" (default) or "declared"
+    SUPERSEDE_SETTING  "strict" (default), "masked" or "declared"
 
 Try it from Claude Code:
     claude mcp add supersede -- .venv/bin/python -m supersede.serve.mcp_server
@@ -27,7 +27,7 @@ mcp = FastMCP("supersede-librarian", log_level="WARNING")
 def corpus() -> CorpusTools:
     return load_corpus_tools(
         os.environ.get("SUPERSEDE_DATA", "data/rfc"),
-        setting=os.environ.get("SUPERSEDE_SETTING", "masked"),
+        setting=os.environ.get("SUPERSEDE_SETTING", "strict"),
     )
 
 
