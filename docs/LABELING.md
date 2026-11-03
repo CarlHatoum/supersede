@@ -1,5 +1,9 @@
 # Labelling guide: validating the answer judge
 
+> **Status (2026-11-03).** Claude Opus 5.5 labelled all 100 rows blind, as a second *model* rater: `results/rfc_answer_staleness_hybrid_labels_claude-opus-5-5.csv`, with notes on borderline rows. Agreement with the Haiku judge is **κ = 0.846 (91/100)**, or κ = 0.746 (94/100) on the reported outcome buckets. All 3 clear `stale` cases agree.
+>
+> This is model–model agreement, not human validation. The human step is now a **29-row spot check**, `results/rfc_answer_staleness_hybrid_human_check.csv`: the 9 judge/Claude disagreements plus 20 random rows, shuffled, with both model labels hidden. It takes about 15 minutes. Run `--kappa` on that file to get human-vs-judge agreement.
+
 The file is `results/rfc_answer_staleness_hybrid_to_label.csv`, with 100 answers in a seeded random order. Open it in Numbers, Excel or Google Sheets. For each row, read `question`, the two reference answers and `answer`, then write **one** label in `human_label`:
 
 | label | when |
