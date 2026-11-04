@@ -36,6 +36,12 @@ def test_lineage_uses_both_declaration_sides(docs):
     assert g.dangling_edges == 1
 
 
+def test_descendants_follow_the_chain(docs):
+    g = LineageGraph(docs)
+    assert g.descendants("RFC1") == {"RFC2", "RFC3"}
+    assert g.descendants("RFC3") == frozenset()
+
+
 def test_lineage_split_and_untouched(docs):
     g = LineageGraph(docs)
     assert g.current_versions("RFC10") == {"RFC11", "RFC12"}

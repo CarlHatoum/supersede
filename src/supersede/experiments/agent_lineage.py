@@ -8,7 +8,12 @@ decision (probability >= its dev-tuned threshold) **on the same pairs**.
 
 Reported: true-positive rate, true-negative rate, balanced accuracy, and an
 estimated precision at the band's real class balance (the sample is balanced,
-the band is not).
+the band is not). Two ground truths:
+
+* ``strict``: positive only if the index records "new obsoletes old" directly.
+* ``lineage``: also positive if new is a later version of old through a chain
+  (A -> B -> C makes "C supersedes A" correct). Saying a document is replaced
+  by its replacement's replacement is not an error for a reader.
 
 Decisions are appended to ``results/agent/<name>.jsonl`` as they finish, so an
 interrupted run resumes where it stopped.
@@ -42,8 +47,8 @@ from supersede.librarian.tools import load_corpus_tools
 from supersede.lineage import LineageGraph
 
 
-def sample_band(cs, low: float, high: float, n: int, seed: int = 0) -> tuple[list[dict], float]:
-    """Balanced sample of test pairs in the band, plus the band's positive rate."""
+def sample_band(cs, low: float, high: float, n: int, seed: int = 0):
+    """Balanced sample of test pairs in the band, the band's positive rate, and the band."""
     band = [
         {"old": o, "new": nw, "gold": y, "cheap_proba": round(p, 4)}
         for (o, nw), y, s, p in zip(cs.pairs, cs.y, cs.split, cs.proba, strict=True)
@@ -54,7 +59,7 @@ def sample_band(cs, low: float, high: float, n: int, seed: int = 0) -> tuple[lis
     rng = random.Random(seed)
     picked = rng.sample(pos, min(n // 2, len(pos))) + rng.sample(neg, min(n - n // 2, len(neg)))
     rng.shuffle(picked)
-    return picked, (len(pos) / len(band) if band else 0.0)
+    return picked, (len(pos) / len(band) if band else 0.0), band
 
 
 def rates(rows: list[dict], predict) -> dict:
@@ -75,7 +80,10 @@ async def run(args) -> dict:
     docs = load_docs(data / "corpus.jsonl")
     gold = LineageGraph(docs)
     cs = cheap_scores(args.setting, data, docs, gold)
-    sample, prior = sample_band(cs, args.low, args.high, args.n, args.seed)
+    sample, prior, band = sample_band(cs, args.low, args.high, args.n, args.seed)
+    prior_lineage = (
+        sum(b["new"] in gold.descendants(b["old"]) for b in band) / len(band) if band else 0.0
+    )
 
     slug = re.sub(r"[^a-z0-9]+", "-", args.model.lower()).strip("-")
     name = f"rfc_agent_{args.setting}_{slug}"
@@ -115,10 +123,19 @@ async def run(args) -> dict:
 
     rows = await asyncio.gather(*(assess(p) for p in sample))
     ok = [r for r in rows if r.get("label")]
-    agent = rates(ok, lambda r: r["label"] == "supersedes")
-    cheap = rates(ok, lambda r: r["cheap_proba"] >= cs.threshold)
-    for m in (agent, cheap):
-        m["est_precision"] = est_precision(m["tpr"], m["tnr"], prior)
+    for r in ok:
+        r["gold_lineage"] = int(r["new"] in gold.descendants(r["old"]))
+    lineage_rows = [{**r, "gold": r["gold_lineage"]} for r in ok]
+
+    def compare_on(rs, base_rate):
+        agent = rates(rs, lambda r: r["label"] == "supersedes")
+        cheap = rates(rs, lambda r: r["cheap_proba"] >= cs.threshold)
+        for m in (agent, cheap):
+            m["est_precision"] = est_precision(m["tpr"], m["tnr"], base_rate)
+        return agent, cheap
+
+    agent, cheap = compare_on(ok, prior)
+    agent_lin, cheap_lin = compare_on(lineage_rows, prior_lineage)
     return {
         "experiment": "agent_lineage",
         "name": name,
@@ -127,23 +144,28 @@ async def run(args) -> dict:
         "prompt_version": PROMPT_VERSION,
         "band": [args.low, args.high],
         "band_positive_rate": prior,
+        "band_positive_rate_lineage": prior_lineage,
         "cheap_threshold": cs.threshold,
         "n_sampled": len(sample),
         "n_failed": len(rows) - len(ok),
         "labels": dict(sorted(Counter(r["label"] for r in ok).items())),
         "mean_steps": sum(r.get("steps", 0) for r in ok) / len(ok) if ok else 0,
         "mean_seconds": sum(r["seconds"] for r in ok) / len(ok) if ok else 0,
+        "n_lineage_only_positives": sum(r["gold_lineage"] and not r["gold"] for r in ok),
         "agent": agent,
         "cheap_scorer": cheap,
+        "lineage_truth": {"agent": agent_lin, "cheap_scorer": cheap_lin},
     }
 
 
 def to_markdown(r: dict) -> str:
-    def row(name, m):
+    def row(truth, name, m):
         return (
-            f"| {name} | {m['tpr']:.2f} | {m['tnr']:.2f} | {m['balanced_accuracy']:.2f} "
-            f"| {m['est_precision']:.2f} |"
+            f"| {truth} | {name} | {m['tpr']:.2f} | {m['tnr']:.2f} "
+            f"| {m['balanced_accuracy']:.2f} | {m['est_precision']:.2f} |"
         )
+
+    lin = r["lineage_truth"]
 
     return "\n".join(
         [
@@ -151,12 +173,18 @@ def to_markdown(r: dict) -> str:
             f"{r['n_sampled']} balanced test pairs ({r['n_failed']} failed). "
             f"Agent model `{r['model']}`, {r['mean_steps']:.1f} steps and "
             f"{r['mean_seconds']:.0f} s per pair on average. Estimated precision uses the "
-            f"band's real positive rate ({r['band_positive_rate']:.2f}).",
+            f"band's real positive rate ({r['band_positive_rate']:.2f} strict, "
+            f"{r['band_positive_rate_lineage']:.2f} lineage).",
             "",
-            "| method | TPR | TNR | balanced acc. | est. precision |",
-            "|---|---|---|---|---|",
-            row("cheap scorer (librarian v0)", r["cheap_scorer"]),
-            row("librarian agent", r["agent"]),
+            "| ground truth | method | TPR | TNR | balanced acc. | est. precision |",
+            "|---|---|---|---|---|---|",
+            row("strict", "cheap scorer (librarian v0)", r["cheap_scorer"]),
+            row("strict", "librarian agent", r["agent"]),
+            row("lineage", "cheap scorer (librarian v0)", lin["cheap_scorer"]),
+            row("lineage", "librarian agent", lin["agent"]),
+            "",
+            f"*lineage* also counts later versions through a chain as correct "
+            f"({r['n_lineage_only_positives']} sampled pairs change label).",
             "",
             f"Agent labels: {r['labels']}",
             "",

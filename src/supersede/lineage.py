@@ -75,6 +75,18 @@ class LineageGraph:
                     queue.append(n)
         return frozenset(heads or {doc_id})
 
+    def descendants(self, doc_id: str) -> frozenset[str]:
+        """Every later version of ``doc_id``: direct and indirect successors."""
+        seen: set[str] = set()
+        queue = deque(self.successors.get(doc_id, ()))
+        while queue:
+            node = queue.popleft()
+            if node not in seen:
+                seen.add(node)
+                queue.extend(self.successors.get(node, ()))
+        seen.discard(doc_id)
+        return frozenset(seen)
+
     def component(self, doc_id: str) -> frozenset[str]:
         """All documents connected to ``doc_id`` by supersession, either direction."""
         seen, queue = {doc_id}, deque([doc_id])

@@ -147,7 +147,8 @@ def test_band_sampling_and_rates():
         split=["test"] * 7 + ["dev"],
         proba=[0.85, 0.85, 0.95, 0.95, 0.5, 0.99, 0.9, 0.9],
     )
-    picked, prior = sample_band(cs, 0.8, 0.98, n=4, seed=0)
+    picked, prior, band = sample_band(cs, 0.8, 0.98, n=4, seed=0)
+    assert len(band) == 5
     # Band = test pairs 0, 1, 2, 3, 6 (pair 7 is dev; 4 and 5 are outside).
     assert prior == 3 / 5
     assert sum(p["gold"] for p in picked) == 2 and len(picked) == 4

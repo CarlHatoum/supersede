@@ -32,7 +32,13 @@ _Last updated: 2026-11-03_
 - `librarian/agent.py`: LangGraph graph triage → investigate ⇄ tools → decide, with structured verdicts.
 - **First end-to-end run** (local Qwen 3.5 9.7B via Ollama, tools over MCP): RFC 2581 → RFC 5681 judged `supersedes` (0.95) after read_doc ×2 and compare. About 2 min per pair locally.
 - **Leak found:** the masked setting hides numbers but keeps sentences like "This document obsoletes [REF]", and the agent used that cue. Add a `strict` setting that removes supersession sentences before evaluating.
-- **Next:** response caching for agent calls, the strict setting, then an evaluation harness (cascade on uncertain test pairs vs logreg vs oracle). Mistral once the key is in. The machine has 16 GB of RAM, so Mistral Small can't run locally; Qwen 3.5 9.7B is the local baseline.
+- **Strict setting added** (also drops supersession sentences). It's the agent default.
+- **First agent evaluation** (local Qwen 3.5 9.7B, strict, 20 balanced pairs from the cheap scorer's uncertain band [0.8, 0.98), `results/agent/`):
+  - Agent TPR 1.00 / TNR 0.70, against cheap scorer 0.40 / 0.90 (strict truth).
+  - With lineage truth (later versions in the same chain count as correct): balanced accuracy 0.89 vs 0.58, estimated precision 0.68 vs 0.41.
+  - Weaknesses: the agent always does read, read, compare (never `search`), and its confidence is almost always 0.95.
+  - This is a smoke test only. The real run needs Mistral and n ≥ 100, with CIs.
+- **Old next step** (strict setting and harness now done): response caching for agent calls, then an evaluation harness (cascade on uncertain test pairs vs logreg vs oracle). Mistral once the key is in. The machine has 16 GB of RAM, so Mistral Small can't run locally; Qwen 3.5 9.7B is the local baseline.
 
 ## Resume
 LLM calls go through `claude -p` on the Claude plan. From a regular terminal:
