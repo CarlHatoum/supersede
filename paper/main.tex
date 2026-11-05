@@ -73,15 +73,19 @@ that recovers document lineage}
 \thispagestyle{empty}
 
 \begin{abstract}\noindent
-Document collections keep old versions next to the documents that replace them,
-and retrieval-augmented generation (RAG) treats every version as equally valid.
-Using the IETF RFC series, whose index records which RFC replaces which, we build
-a benchmark of \res{corpus.n_docs} documents and \res{corpus.n_supersession_edges}
-replacement links. Lexical, dense and hybrid retrievers all rank the obsolete
-version first for a large share of queries, and the error reaches generated
-answers when version metadata is missing. Known lineage fixes both; unknown
-lineage must be inferred. We infer it with a cascade: a cheap feature-based scorer
-for clear cases, and a tool-using \emph{librarian agent} for the uncertain ones.
+Retrieval-augmented generation (RAG) serves outdated documents: recent benchmarks
+show it across Wikipedia edits, medicine, law and software. Their fixes, such as
+time-decay ranking or recency re-ranking, rely on dates being present and right,
+and fail when they are not. We study the case they leave open: \emph{the collection
+does not say which document replaces which}. On the IETF RFC series, whose index
+records \res{corpus.n_supersession_edges} replacement links among
+\res{corpus.n_docs} documents, we first confirm that lexical, dense and hybrid
+retrievers rank the obsolete version first for a large share of queries and that
+the error reaches answers when metadata is missing. We then infer the lineage
+itself, with every explicit cue removed, using a cascade: a cheap feature-based
+scorer for clear cases and a tool-using \emph{librarian agent} (LangGraph, tools
+over MCP, local open-weight models) for the ambiguous ones. The benchmark, code
+and every result are public, and this draft is rebuilt from them.
 \end{abstract}
 
 \begin{tcolorbox}[enhanced,colback=white,colframe=rule,boxrule=0.6pt,arc=3pt,
@@ -91,22 +95,23 @@ for clear cases, and a tool-using \emph{librarian agent} for the uncertain ones.
   boxed title style={boxrule=0pt,colback=white,left=3pt,right=3pt}]
 \small
 \begin{enumerate}[label=\textbf{\textcolor{accent}{\arabic*}},leftmargin=1.4em]
-\item \textbf{Retrieval prefers the obsolete version.} For questions whose answer
-  changed between versions, the hybrid retriever puts the obsolete document first
-  \res{qret.hybrid.none.stale1.pct} of the time; a better retriever is \emph{more}
-  stale, not less (Fig.~\ref{fig:retrieval}).
-\item \textbf{It reaches answers when metadata is missing.} Without dates or
-  version numbers in the context, \res{ans.blind.naive.stale_outcome} of answers
-  are stale; showing both versions with the old one marked brings this to
-  \res{ans.blind.show_conflict.stale_outcome} (Fig.~\ref{fig:answers}).
-\item \textbf{Lineage can be partly inferred cheaply.} A logistic regression on
-  similarity and date features closes \res{lin.strict.logreg.title.gap} of the gap
-  to perfect lineage, with every explicit cue removed (Fig.~\ref{fig:lineage}).
-\item \textbf{An agent helps where the scorer is unsure} \emph{(preliminary,
-  $n{=}20$).} On pairs the scorer finds ambiguous, a local 9.7B-parameter agent
-  reaches \res{agent.qwen3.5-hermes.agent-v2.strict.ba} balanced accuracy against
-  \res{agent.cheap.strict.ba} for the scorer. Whether the model follows the
-  investigation procedure matters (Fig.~\ref{fig:agent}).
+\item \textbf{Staleness, confirmed on a real lineage graph.} For questions whose
+  answer changed between versions, the hybrid retriever puts the obsolete document
+  first \res{qret.hybrid.none.stale1.pct} of the time; without dates or version
+  numbers, \res{ans.blind.naive.stale_outcome} of answers are stale
+  (Figs.~\ref{fig:retrieval},~\ref{fig:answers}).
+\item \textbf{Known lineage removes it.} Promoting the current version cuts
+  top-1 staleness to zero, and showing both versions with the old one marked
+  brings stale answers to \res{ans.blind.show_conflict.stale_outcome}.
+\item \textbf{Lineage can be inferred without metadata.} With every explicit cue
+  removed, cheap similarity and date features close
+  \res{lin.strict.logreg.title.gap} of the gap to perfect lineage
+  (Fig.~\ref{fig:lineage}).
+\item \textbf{An agent handles the ambiguous pairs} \emph{(preliminary,
+  $n{=}20$; $n{=}100$ with ablations in progress).} On pairs the scorer finds
+  ambiguous, a local 9.7B-parameter agent reaches
+  \res{agent.qwen3.5-hermes.agent-v2.strict.ba} balanced accuracy against
+  \res{agent.cheap.strict.ba} for the scorer (Fig.~\ref{fig:agent}).
 \end{enumerate}
 \end{tcolorbox}
 
@@ -230,13 +235,15 @@ of the time with BM25, \res{ret.dense.new_title.none.stale1.pct} with dense retr
 \res{ret.hybrid.new_title.none.stale1.pct} with the hybrid; on change-aware questions,
 \res{qret.hybrid.none.stale1.pct} \res{qret.hybrid.none.stale1.cipct} with the hybrid.
 The best topical matcher is the most stale, because the old document \emph{is} a
-good match for the topic. With oracle lineage, \code{promote} raises the hybrid's
+good match for the topic, as HoH found for dense retrievers on
+Wikipedia~\cite{ouyang2025hoh}. With oracle lineage, \code{promote} raises the hybrid's
 current@1 from \res{ret.hybrid.new_title.none.current1.pct} to
 \res{ret.hybrid.new_title.promote.current1.pct} on new titles
 (Fig.~\ref{fig:retrieval}b).
 
-\Takeaway{Staleness is a property of the collection, not of a weak retriever.
-Better retrieval makes it worse. Knowing the lineage removes it almost completely.}
+\Takeaway{Staleness is a property of the collection, not of a weak retriever:
+better retrieval makes it worse. Knowing the lineage removes it almost completely,
+which is why the rest of the paper is about recovering the lineage.}
 
 % =========================================================================
 \section{Q2: does it reach the answer?}\label{sec:answers}
@@ -398,26 +405,60 @@ the model actually follows the investigation. With 20 pairs the intervals overla
 this is a direction, not yet a finding. Runs on $\geq$100 pairs are next.}
 
 % =========================================================================
-\section{Related work}
-\todo{expand; verify every reference before submission.}
-Time-sensitive QA studies questions whose answer changes over
-time~\cite{chen2021timeqa,kasai2023realtimeqa,dhingra2022timeaware}; we study the
-document side: which version of a document is in force. Knowledge-conflict work
-asks how models resolve contradictions between memory and context or between
-passages~\cite{longpre2021entity,xie2024chameleon}; here the conflict has a ground
+\section{Related work}\label{sec:related}
+
+\paragraph{Outdated documents in RAG} HoH~\cite{ouyang2025hoh} builds 96k
+questions from monthly Wikipedia diffs, keeps current and outdated passages
+together, and shows that outdated passages hurt more than distracting ones and
+that stronger retrievers fetch more of them; mitigations rely on modification
+times. Stale-Document Poisoning~\cite{ahmed2026poisoning} measures how often
+outdated evidence overturns an answer a model gets right closed-book (17--91\% for
+open models, 317 reversals in four domains); its recency re-ranker helps only when
+dates are correct, and with wrong dates it stops selecting the current document
+at all. MemStrata~\cite{memstrata2026} retires superseded facts in agent memory
+using ingestion order as time, and warns that textual markers such as
+``deprecated'' let baselines read the answer, which our masked and strict
+settings rule out. ChurnBench~\cite{singh2026churnbench} measures freshness errors
+of agents over enterprise data with timestamped change logs. All of these assume
+time metadata or change logs; \emph{we target collections where lineage is
+unrecorded and dates are unreliable}, and infer the lineage.
+
+\paragraph{Version detection} Modani et al.~\cite{modani2021versions} detect
+versions and order them in a Wikipedia-derived collection. GVD~\cite{sediqin2026gvd}
+groups enterprise documents into version families and classifies rule-level
+relations (duplicate, contradiction, refinement) without an LLM, on 120
+confidential documents, without a downstream RAG evaluation. We infer directed
+replacement links, including chains, on a public benchmark, and measure their
+effect on retrieval and answers; our second stage is an agent with tools.
+
+\paragraph{Knowledge conflicts and time} Conflict benchmarks such as
+ConflictBank~\cite{su2024conflictbank} and WikiContradict~\cite{hou2024wikicontradict}
+study disagreements between memory and context or between passages;
+time-sensitive QA~\cite{chen2021timeqa,kasai2023realtimeqa,dhingra2022timeaware}
+studies questions whose answer changes; and knowledge-conflict work asks how models
+arbitrate~\cite{longpre2021entity,xie2024chameleon}. Here the conflict has a ground
 truth, the lineage. LLM judges~\cite{zheng2023judge} need validation, which we
-report as agreement statistics.
+report as agreement statistics; the agent follows the ReAct pattern of interleaved
+reasoning and tool calls~\cite{yao2023react}.
 
 \section{Limitations and next steps}
 \begin{itemize}
-\item One domain (RFCs), with short abstracts. Aviation advisory circulars are next.
-\item \res{qgen.accepted} change-aware questions; in some, the reference ``new''
-  version has itself been replaced since (flagged in the dataset).
-\item The judge is checked against a second model, not yet against people.
-\item Agent results use 20 pairs per run; how much of the remaining gap the agent
-  closes downstream is not yet measured.
-\item Deployment (MCP and A2A interfaces, a container on Cloud Run) is in progress
-  and will be reported with latency and cost.
+\item \textbf{One domain.} RFCs, with short abstracts. Aviation advisory
+  circulars are next. Models have likely seen many RFCs in pre-training; a
+  closed-book baseline (in progress) separates parametric knowledge from context.
+\item \textbf{Few questions, model-checked.} \res{qgen.accepted} change-aware
+  questions, validated against a second model rather than people (a human check
+  is pending; HoH and Stale-Document Poisoning report human checks). A larger,
+  head-only generation is planned.
+\item \textbf{One answering model} so far; open-weight answering models are in
+  progress.
+\item \textbf{Agent evidence is preliminary.} The 20-pair runs are being replaced
+  by 100 nested pairs with ablations (no tools, no \code{find\_later}), paired
+  tests, repeated runs, cost, and the downstream gap closed by the agent.
+\item \textbf{Recency baselines} (newest-first, time decay) and their behaviour
+  under missing or wrong years are being added.
+\item \textbf{Deployment} (MCP and A2A interfaces, Cloud Run) is in progress and
+  will be reported with latency and cost.
 \end{itemize}
 
 \section{Reproducibility and release}\label{sec:repro}
@@ -506,6 +547,14 @@ strict, \res{agent.prior.lineage} lineage).}
 \bibitem{cormack2009rrf} G.~V.~Cormack, C.~L.~A.~Clarke, S.~B\"uttcher. Reciprocal rank fusion outperforms Condorcet and individual rank learning methods. \emph{SIGIR}, 2009.
 \bibitem{zheng2023judge} L.~Zheng et al. Judging LLM-as-a-judge with MT-Bench and Chatbot Arena. \emph{NeurIPS Datasets and Benchmarks}, 2023.
 \bibitem{cohen1960kappa} J.~Cohen. A coefficient of agreement for nominal scales. \emph{Educational and Psychological Measurement}, 1960.
+\bibitem{ouyang2025hoh} J.~Ouyang, T.~Pan, M.~Cheng, R.~Yan, Y.~Luo, J.~Lin, Q.~Liu. HoH: A dynamic benchmark for evaluating the impact of outdated information on retrieval-augmented generation. arXiv:2503.04800, 2025.
+\bibitem{ahmed2026poisoning} M.~S.~Ahmed, L.~Galke Poech, R.~R\"ottger. Stale-document poisoning: When outdated retrieval overrides correct model answers. arXiv:2609.31342, 2026.
+\bibitem{memstrata2026} Anonymous. Temporal validity in retrieval memory: Eliminating stale-fact errors for AI agents over evolving knowledge. arXiv:2606.26511, 2026.
+\bibitem{singh2026churnbench} V.~K.~Singh, P.~Priyam, G.~Bhowmick. ChurnBench: A drift-aware benchmark demonstrating that refresh scheduling, not cache age, governs staleness in agentic AI. arXiv:2609.11515, 2026.
+\bibitem{sediqin2026gvd} M.~Sediqin, S.~Dalmia, S.~Thoppanahalli, A.~Mukherji. GVD: Governed versioning and deduplication for document repositories. arXiv:2609.17696, 2026.
+\bibitem{modani2021versions} N.~Modani, A.~Maurya, G.~Verma, I.~Nair, V.~Patil, A.~Kanfade. Detecting document versions and their ordering in a collection. \emph{WISE}, 2021.
+\bibitem{su2024conflictbank} Z.~Su et al. ConflictBank: A benchmark for evaluating the influence of knowledge conflicts in LLM. arXiv:2408.12076, 2024.
+\bibitem{hou2024wikicontradict} Y.~Hou et al. WikiContradict: A benchmark for evaluating LLMs on real-world knowledge conflicts from Wikipedia. \emph{NeurIPS Datasets and Benchmarks}, 2024.
 \bibitem{yao2023react} S.~Yao et al. ReAct: Synergizing reasoning and acting in language models. \emph{ICLR}, 2023.
 \end{thebibliography}
 
