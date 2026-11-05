@@ -50,7 +50,8 @@ computed locally with this script:
 
     from datasets import load_dataset
     from masking import apply
-    corpus = load_dataset("<repo>", "corpus")["corpus"].map(lambda r: apply(r, "strict"))
+    corpus = load_dataset("hatoum/supersede-rfc", "corpus")["corpus"]
+    strict = corpus.map(lambda r: apply(r, "strict"))
 """
 
 import re
@@ -311,7 +312,13 @@ def main() -> None:
 
         api = HfApi()
         api.create_repo(args.push, repo_type="dataset", private=args.private, exist_ok=True)
-        api.upload_folder(folder_path=str(args.out), repo_id=args.push, repo_type="dataset")
+        api.upload_folder(
+            folder_path=str(args.out),
+            repo_id=args.push,
+            repo_type="dataset",
+            ignore_patterns=["__pycache__/*", "*.pyc", ".DS_Store"],
+            delete_patterns=["__pycache__/*", "*.pyc"],
+        )
         print(f"https://huggingface.co/datasets/{args.push}")
 
 
