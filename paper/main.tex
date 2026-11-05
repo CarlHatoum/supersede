@@ -370,6 +370,12 @@ built by \texttt{make paper}, which regenerates all numbers from
 \texttt{results/}. LLM responses for question generation, answering and
 judging are cached in SQLite, so \texttt{make reproduce} rebuilds them offline.
 Agent decisions are logged per pair, with tool traces.
+The benchmark (corpus, lineage, title queries, change-aware questions and
+lineage-inference candidate pairs, with lineage-level splits) is packaged as a
+Hugging Face dataset, \texttt{hatoum/supersede-rfc} (private until release).
+RFC abstracts are shipped verbatim, as the IETF Trust Legal Provisions allow
+unmodified, attributed excerpts but not modified text; the \texttt{masked} and
+\texttt{strict} views are derived locally by a script shipped with the data.
 
 \appendix
 \section{Provenance}

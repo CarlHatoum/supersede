@@ -74,3 +74,10 @@ Then:
 - After any experiment: `make paper`, then commit the results, `paper/generated/` and `paper/main.pdf` together.
 - Agent runs are rescored from their logs with no model calls: `python -m supersede.experiments.agent_lineage --prompt-version agent-v1 --n 20`.
 - Agent models are local only (Ollama): `ministral-3:8b` (main), `edtorre/qwen3.5-hermes` (comparison). No API key.
+
+## Hugging Face dataset
+
+- `hatoum/supersede-rfc`, **private** (uploaded 2026-11-05). Make it public on the Hub (Settings → visibility) once the thesis supervisor agrees.
+- Rebuild: `make hf` (folder in `dist/hf/supersede-bench`); upload: `python -m supersede.bench.export_hf --push hatoum/supersede-rfc --private`.
+- Licence: RFC abstracts ship verbatim (IETF TLP 5.0 §3.c allows unmodified, attributed excerpts; no right to modify), annotations CC BY 4.0. Masked/strict views are computed by the bundled `masking.py`, never uploaded.
+- Before going public: add the code link and citation to the card.
