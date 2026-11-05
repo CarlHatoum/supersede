@@ -45,12 +45,15 @@ K = 10
 THRESHOLDS = [t / 20 for t in range(2, 19)] + [0.92, 0.94, 0.96, 0.97, 0.98, 0.99, 0.995]
 
 
-def candidates(docs, data: Path):
+def candidates(docs, data: Path, order_key=None):
     """Candidate pairs with features, from text and title embeddings."""
+    from supersede.librarian.candidates import doc_order
+
+    order_key = order_key or doc_order
     text = DenseRetriever([(d.doc_id, d.text) for d in docs], DENSE_MODEL, cache_dir=data / "emb")
     title = DenseRetriever([(d.doc_id, d.title) for d in docs], DENSE_MODEL, cache_dir=data / "emb")
-    ranks = neighbour_pairs(docs, text.emb, N_NEIGHBOURS)
-    for pair, r in neighbour_pairs(docs, title.emb, N_NEIGHBOURS).items():
+    ranks = neighbour_pairs(docs, text.emb, N_NEIGHBOURS, order_key=order_key)
+    for pair, r in neighbour_pairs(docs, title.emb, N_NEIGHBOURS, order_key=order_key).items():
         ranks[pair] = min(ranks.get(pair, r), r)
     idx = {d.doc_id: i for i, d in enumerate(docs)}
     by_id = {d.doc_id: d for d in docs}
@@ -98,9 +101,11 @@ class CheapScores:
     model: LogisticRegression
 
 
-def cheap_scores(setting: str, data: Path, docs_orig, gold: LineageGraph) -> CheapScores:
+def cheap_scores(
+    setting: str, data: Path, docs_orig, gold: LineageGraph, order_key=None
+) -> CheapScores:
     docs = masking.apply(docs_orig, setting)
-    pairs, feats = candidates(docs, data)
+    pairs, feats = candidates(docs, data, order_key)
     gold_edges = set(gold.edges)
     y = [int(p in gold_edges) for p in pairs]
     split = [split_of(gold.component(old)) for old, _ in pairs]

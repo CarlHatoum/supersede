@@ -1,0 +1,9 @@
+# Night 2: Ministral 3 (comparison model) on the 100 pairs, then run-to-run variance
+# (temperature 0.3, three repeats on the first 50 pairs) for the no-tools and full agent.
+--model ollama:ministral-3:8b --variant full --n 100
+--variant llm_only --n 50 --temperature 0.3 --run 1
+--variant llm_only --n 50 --temperature 0.3 --run 2
+--variant llm_only --n 50 --temperature 0.3 --run 3
+--variant full --n 50 --temperature 0.3 --run 1
+--variant full --n 50 --temperature 0.3 --run 2
+--variant full --n 50 --temperature 0.3 --run 3

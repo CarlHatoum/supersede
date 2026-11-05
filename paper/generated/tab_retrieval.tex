@@ -5,22 +5,34 @@ retriever & query & policy & stale@1$\downarrow$ & current@1$\uparrow$ & current
 bm25 & new title & \texttt{none} & 0.417 & 0.440 & 0.931 & 0.628 \\
  &  & \texttt{filter} & 0.000 & 0.750 & 0.931 & 0.821 \\
  &  & \texttt{promote} & 0.000 & 0.857 & 0.983 & 0.905 \\
+ &  & \texttt{newest\_first} & 0.161 & 0.590 & 0.931 & 0.703 \\
+ &  & \texttt{time\_decay} & 0.124 & 0.579 & 0.906 & 0.704 \\
  & old title & \texttt{none} & 0.722 & 0.152 & 0.790 & 0.394 \\
  &  & \texttt{filter} & 0.000 & 0.568 & 0.790 & 0.651 \\
  &  & \texttt{promote} & 0.000 & 0.874 & 0.986 & 0.916 \\
+ &  & \texttt{newest\_first} & 0.274 & 0.448 & 0.790 & 0.542 \\
+ &  & \texttt{time\_decay} & 0.352 & 0.357 & 0.778 & 0.508 \\
 \midrule
 dense & new title & \texttt{none} & 0.459 & 0.446 & 0.928 & 0.643 \\
  &  & \texttt{filter} & 0.000 & 0.803 & 0.928 & 0.855 \\
  &  & \texttt{promote} & 0.000 & 0.904 & 0.992 & 0.938 \\
+ &  & \texttt{newest\_first} & 0.186 & 0.670 & 0.928 & 0.756 \\
+ &  & \texttt{time\_decay} & 0.140 & 0.609 & 0.913 & 0.720 \\
  & old title & \texttt{none} & 0.749 & 0.170 & 0.793 & 0.415 \\
  &  & \texttt{filter} & 0.000 & 0.620 & 0.793 & 0.686 \\
  &  & \texttt{promote} & 0.000 & 0.916 & 0.996 & 0.947 \\
+ &  & \texttt{newest\_first} & 0.321 & 0.496 & 0.793 & 0.578 \\
+ &  & \texttt{time\_decay} & 0.321 & 0.384 & 0.774 & 0.517 \\
 \midrule
 hybrid & new title & \texttt{none} & 0.528 & 0.395 & 0.937 & 0.621 \\
  &  & \texttt{filter} & 0.000 & 0.809 & 0.937 & 0.861 \\
  &  & \texttt{promote} & 0.000 & 0.923 & 0.994 & 0.950 \\
+ &  & \texttt{newest\_first} & 0.183 & 0.653 & 0.937 & 0.750 \\
+ &  & \texttt{time\_decay} & 0.169 & 0.597 & 0.941 & 0.737 \\
  & old title & \texttt{none} & 0.816 & 0.111 & 0.810 & 0.389 \\
  &  & \texttt{filter} & 0.000 & 0.615 & 0.810 & 0.689 \\
  &  & \texttt{promote} & 0.000 & 0.927 & 0.996 & 0.953 \\
+ &  & \texttt{newest\_first} & 0.315 & 0.486 & 0.810 & 0.576 \\
+ &  & \texttt{time\_decay} & 0.327 & 0.401 & 0.820 & 0.556 \\
 \bottomrule
 \end{tabular}

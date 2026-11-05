@@ -84,3 +84,20 @@ def test_strict_setting_drops_supersession_sentences():
     assert strict.abstract == "Specifies four algorithms."
     text = "Defines X. Replaces the old Y; keeps Z."
     assert masking.strip_supersession(text) == "Defines X. keeps Z."
+
+
+def test_corrupt_years_and_year_only_order():
+    from supersede.corpus import Doc
+    from supersede.experiments.recency_noise import corrupt_years
+    from supersede.librarian.candidates import year_only_order
+
+    docs = [Doc(f"RFC{i}", "t", year=1990 + i) for i in range(100)]
+    years = corrupt_years(docs, 0.3, seed=0)
+    changed = [d.doc_id for d in docs if years[d.doc_id] != d.year]
+    assert len(changed) == 30
+    assert sum(years[c] is None for c in changed) == 15
+    assert all(years[c] is None or 1 <= abs(years[c] - int(c[3:]) - 1990) <= 10 for c in changed)
+    assert corrupt_years(docs, 0.0, seed=0) == {d.doc_id: d.year for d in docs}
+    # Order ignores document numbers: same year, so the hash decides, not 1 < 2.
+    a, b = Doc("RFC1", "t", year=2000), Doc("RFC2", "t", year=2000)
+    assert year_only_order(a)[0] == year_only_order(b)[0] == 2000

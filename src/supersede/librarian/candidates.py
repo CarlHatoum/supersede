@@ -19,14 +19,28 @@ def doc_order(d: Doc) -> tuple[int, int, str]:
     return (d.year or 0, int(m.group()) if m else 0, d.doc_id)
 
 
-def neighbour_pairs(docs: list[Doc], emb, n_neighbours: int = 10, block: int = 1024):
+def year_only_order(d: Doc) -> tuple[int, str]:
+    """Publication order from the year alone, ties broken by a stable hash of the ID.
+
+    For experiments where dates are unreliable: document numbers must not leak
+    the true order.
+    """
+    import hashlib
+
+    return (d.year or 0, hashlib.sha1(d.doc_id.encode()).hexdigest())
+
+
+def neighbour_pairs(
+    docs: list[Doc], emb, n_neighbours: int = 10, block: int = 1024, order_key=doc_order
+):
     """``{(old, new): rank}``, where rank is 1-based in either doc's neighbour list (best kept).
 
-    ``emb`` is an (n_docs, dim) array of unit vectors aligned with ``docs``.
+    ``emb`` is an (n_docs, dim) array of unit vectors aligned with ``docs``;
+    ``order_key`` decides which document of a pair is the older one.
     """
     import numpy as np
 
-    order = [doc_order(d) for d in docs]
+    order = [order_key(d) for d in docs]
     pairs: dict[tuple[str, str], int] = {}
     for start in range(0, len(docs), block):
         sims = emb[start : start + block] @ emb.T

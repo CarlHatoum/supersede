@@ -1,0 +1,4 @@
+# Night 3: downstream effect on questions. The full agent (Qwen) decides every band pair
+# whose older document appears in the hybrid top 10 of a test question (203 pairs,
+# minus those already decided in the sample runs).
+--variant full --pairs questions --n 0

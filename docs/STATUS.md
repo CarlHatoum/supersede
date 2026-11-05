@@ -81,3 +81,17 @@ Then:
 - Rebuild: `make hf` (folder in `dist/hf/supersede-bench`); upload: `python -m supersede.bench.export_hf --push hatoum/supersede-rfc` (add `--private` only for a new repo).
 - Licence: RFC abstracts ship verbatim (IETF TLP 5.0 §3.c allows unmodified, attributed excerpts; no right to modify), annotations CC BY 4.0. Masked/strict views are computed by the bundled `masking.py`, never uploaded.
 - Still to add to the card: a citation (once the paper is on arXiv).
+
+## Plan v2 in progress (from 2026-11-05)
+
+The execution plan (workstreams A–F, dated to the 7 Dec talk) lives in the private plan file. Main claim: **inferring lineage when metadata is missing**, with a cheap scorer and then an agent.
+
+- **A. Positioning (done):** related work in `paper/notes/related.md`. Note that HoH already reports "better retriever ⇒ more stale".
+- **B1. Recency baselines (done):** `rerank.newest_first` and `rerank.time_decay`, tuned on dev and added to `experiments/staleness.py`.
+- **B2. Year-noise sweep:** `experiments/recency_noise.py` → `results/rfc_recency_noise.json`. It orders pairs by year only (`candidates.year_only_order`), never by document number.
+- **C. Agent evaluation:**
+  - Decisions are cached in `results/agent/decisions/<setting>_<model>_<variant>_<prompt>_t<temp>_r<run>.jsonl`.
+  - Metrics come from `python -m supersede.experiments.agent_compare --n 100` → `results/agent/compare_strict_n100.json`.
+  - Queues: `scripts/agent_queue.sh scripts/queues/nightN.txt` (sequential and resumable; put `/usr/local/bin` on PATH for `ollama`).
+  - Nights: 1 = Qwen, 3 variants × 100 pairs; 2 = Ministral + variance; 3 = downstream questions (203 pairs); 4 = downstream titles with llm_only (1,798 pairs).
+  - The old 20-pair runs (sample s1, not nested) are in `results/agent/history/`.

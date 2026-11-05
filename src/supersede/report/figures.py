@@ -99,14 +99,6 @@ def fig_retrieval(res: Path, out: Path) -> bool:
     _pct_axis(a)
     a.set_xlabel("stale@1: top result is an obsolete version")
     a.set_title("(a) The obsolete version often ranks first")
-    a.legend(
-        handles=[Line2D([], [], color=c, lw=6, label=k) for k, c in RETRIEVER.items()],
-        loc="lower right",
-        ncol=3,
-        handlelength=0.9,
-        columnspacing=0.9,
-        bbox_to_anchor=(1.0, -0.42),
-    )
 
     # (b) current@1 without lineage -> with oracle lineage (promote), per retriever.
     items = []
@@ -133,6 +125,29 @@ def fig_retrieval(res: Path, out: Path) -> bool:
         b.plot([x0, x1], [i, i], color=GREY_LIGHT, lw=2.2, zorder=1, solid_capstyle="round")
         b.scatter([x0], [i], s=26, color="white", edgecolor=GREY, lw=1.2, zorder=3)
         b.scatter([x1], [i], s=30, color=RETRIEVER[ret], edgecolor="white", lw=1.2, zorder=3)
+        rows = titles["rows"] if "title" in _name else qs["rows"]
+        match = {"variant": "new_title"} if "title" in _name else {}
+        newest = next(
+            (
+                r
+                for r in rows
+                if r["retriever"] == ret
+                and r["policy"] == "newest_first"
+                and all(r[k] == v for k, v in match.items())
+            ),
+            None,
+        )
+        if newest:
+            b.scatter(
+                [newest["current@1"]],
+                [i],
+                s=26,
+                marker="D",
+                color="white",
+                edgecolor=RETRIEVER[ret],
+                lw=1.2,
+                zorder=3,
+            )
         b.text(x0 - 0.025, i, f"{x0:.0%}", va="center", ha="right", fontsize=7, color=INK_2)
         b.text(x1 + 0.025, i, f"{x1:.0%}", va="center", fontsize=7)
     b.set_yticks(range(len(items)), [it[0] for it in items])
@@ -140,10 +155,12 @@ def fig_retrieval(res: Path, out: Path) -> bool:
     _pct_axis(b, 1.12)
     b.set_xticks([0, 0.25, 0.5, 0.75, 1.0])
     b.set_xlabel("current@1: top result is in force")
-    b.set_title("(b) Known lineage fixes it")
-    b.legend(
+    b.set_title("(b) Known lineage fixes it; recency only partly")
+    fig.legend(
         handles=[
+            *[Line2D([], [], color=c, lw=6, label=k) for k, c in RETRIEVER.items()],
             Line2D([], [], ls="", marker="o", mfc="white", mec=GREY, label="as retrieved"),
+            Line2D([], [], ls="", marker="D", mfc="white", mec=INK_2, label="newest first"),
             Line2D(
                 [],
                 [],
@@ -151,12 +168,15 @@ def fig_retrieval(res: Path, out: Path) -> bool:
                 marker="o",
                 mfc=INK_2,
                 mec="white",
-                label="with promote (oracle lineage)",
+                label="promote (oracle lineage)",
             ),
         ],
-        loc="lower right",
-        ncol=2,
-        bbox_to_anchor=(1.0, -0.42),
+        loc="lower center",
+        ncol=6,
+        handlelength=0.9,
+        columnspacing=1.0,
+        handletextpad=0.4,
+        bbox_to_anchor=(0.5, -0.2),
     )
     fig.savefig(out / "fig_retrieval.pdf")
     plt.close(fig)
@@ -343,6 +363,84 @@ def fig_agent(res: Path, out: Path) -> bool:
     return True
 
 
+NOISE_METHODS = [
+    ("none", "as retrieved", GREY, (0, (2, 2)), "o"),
+    ("newest_first", "newest first", ORANGE, "-", "D"),
+    ("time_decay", "time decay", AQUA, "-", "s"),
+    ("lineage_v0", "inferred lineage (v0)", BLUE, "-", "o"),
+    ("oracle", "oracle lineage", INK, (0, (4, 2)), ""),
+]
+
+
+def fig_noise(res: Path, out: Path) -> bool:
+    r = load(res / "rfc_recency_noise.json")
+    if not r:
+        return False
+    summ = r["summary"]
+    qsets = sorted(
+        dict.fromkeys(s["queries"] for s in summ), key=lambda q: not q.startswith("title")
+    )
+    fig, axes = plt.subplots(
+        1, len(qsets), figsize=(WIDTH, 2.0), sharey=True, gridspec_kw={"wspace": 0.1}
+    )
+    axes = [axes] if len(qsets) == 1 else axes
+    for ax, q in zip(axes, qsets, strict=True):
+        for method, _, colour, ls, marker in NOISE_METHODS:
+            pts = sorted(
+                (s for s in summ if s["queries"] == q and s["method"] == method),
+                key=lambda s: s["share"],
+            )
+            xs = [s["share"] for s in pts]
+            ax.fill_between(
+                xs,
+                [s["current@1_min"] for s in pts],
+                [s["current@1_max"] for s in pts],
+                color=colour,
+                alpha=0.12,
+                lw=0,
+            )
+            ax.plot(
+                xs,
+                [s["current@1"] for s in pts],
+                color=colour,
+                ls=ls,
+                lw=1.6,
+                marker=marker or None,
+                ms=4,
+                mfc="white" if marker else None,
+                zorder=3,
+            )
+        ax.set_xticks(xs, [f"{x:.0%}" for x in xs])
+        ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(1.0, decimals=0))
+        ax.set_ylim(0, 1)
+        ax.grid(axis="x", visible=False)
+        ax.set_xlabel("documents with a missing or wrong year")
+        ax.set_title(f"{q}: current@1")
+    fig.legend(
+        handles=[
+            Line2D(
+                [],
+                [],
+                color=c,
+                ls=ls,
+                lw=1.6,
+                marker=m or None,
+                ms=4,
+                mfc="white" if m else None,
+                label=lab,
+            )
+            for _, lab, c, ls, m in NOISE_METHODS
+        ],
+        loc="lower center",
+        ncol=5,
+        bbox_to_anchor=(0.5, -0.24),
+        handlelength=2.2,
+    )
+    fig.savefig(out / "fig_noise.pdf")
+    plt.close(fig)
+    return True
+
+
 def build(res: Path, out: Path) -> dict[str, bool]:
     out.mkdir(parents=True, exist_ok=True)
     return {
@@ -350,6 +448,7 @@ def build(res: Path, out: Path) -> dict[str, bool]:
         "fig_answers": fig_answers(res, out),
         "fig_lineage": fig_lineage(res, out),
         "fig_agent": fig_agent(res, out),
+        "fig_noise": fig_noise(res, out),
     }
 
 

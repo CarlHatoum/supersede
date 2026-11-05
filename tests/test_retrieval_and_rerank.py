@@ -56,3 +56,20 @@ def test_metrics():
 def test_bootstrap_ci_brackets_mean():
     lo, hi = bootstrap_ci([0.0, 1.0] * 50)
     assert lo < 0.5 < hi
+
+
+def test_recency_baselines_prefer_newer_documents():
+    from supersede.rerank import newest_first, time_decay
+
+    scored = [("old", 1.0), ("mid", 0.9), ("new", 0.5), ("undated", 0.95)]
+    years = {"old": 1990, "mid": 2005, "new": 2020, "undated": None}
+    assert newest_first(scored, years, window=2, k=4) == ["mid", "old", "new", "undated"]
+    assert newest_first(scored, years, window=4, k=2) == ["new", "mid"]
+    # Strong decay lets a weaker but newer match win; no decay keeps the retrieval order.
+    assert time_decay(scored, years, lam=0.2, k=1, ref_year=2020) == ["new"]
+    assert time_decay(scored, years, lam=0.0, k=4, ref_year=2020) == [
+        "old",
+        "undated",
+        "mid",
+        "new",
+    ]

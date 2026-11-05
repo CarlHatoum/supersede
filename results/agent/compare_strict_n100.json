@@ -1,0 +1,43 @@
+{
+  "experiment": "agent_compare",
+  "setting": "strict",
+  "sample_version": "s2",
+  "n": 100,
+  "band": [
+    0.8,
+    0.98
+  ],
+  "band_size": 2735,
+  "band_positive_rate": 0.14149908592321755,
+  "band_positive_rate_lineage": 0.24753199268738574,
+  "cheap_threshold": 0.94,
+  "cheap_scorer": {
+    "strict": {
+      "tpr": 0.62,
+      "tnr": 0.82,
+      "balanced_accuracy": 0.72,
+      "balanced_accuracy_ci95": [
+        0.63,
+        0.8
+      ],
+      "est_precision": 0.3621298560173865,
+      "n_pos": 50,
+      "n_neg": 50
+    },
+    "lineage": {
+      "tpr": 0.5714285714285714,
+      "tnr": 0.8181818181818182,
+      "balanced_accuracy": 0.6948051948051948,
+      "balanced_accuracy_ci95": [
+        0.6006493506493507,
+        0.7784090909090908
+      ],
+      "est_precision": 0.5083276450511945,
+      "n_pos": 56,
+      "n_neg": 44
+    }
+  },
+  "methods": [],
+  "paired": [],
+  "stability": []
+}

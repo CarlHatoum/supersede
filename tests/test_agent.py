@@ -224,3 +224,15 @@ def test_decision_log_names_and_cache(tmp_path):
         + "\n"
     )
     assert set(load_decisions(p)) == {("a", "b")}
+
+
+def test_mcnemar_exact_and_paired_diff():
+    from supersede.experiments.agent_compare import mcnemar_exact, paired_ba_diff_ci
+
+    assert mcnemar_exact(0, 0) == 1.0
+    assert abs(mcnemar_exact(10, 0) - 2 / 1024) < 1e-12  # all 10 discordant pairs favour one side
+    assert abs(mcnemar_exact(3, 5) - 0.7265625) < 1e-9
+    rows = [{"gold": 1, "a": True, "b": i < 2} for i in range(10)]
+    rows += [{"gold": 0, "a": False, "b": False} for _ in range(10)]
+    lo, hi = paired_ba_diff_ci(rows, lambda r: r["a"], lambda r: r["b"])
+    assert 0 < lo <= 0.4 <= hi

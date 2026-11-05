@@ -24,7 +24,7 @@ from pathlib import Path
 
 from supersede.corpus import read_jsonl
 
-POLICIES = ("none", "filter", "promote")
+POLICIES = ("none", "filter", "promote", "newest_first", "time_decay")
 ANSWER_POLICIES = ("naive", "latest_only", "show_conflict")
 RETRIEVERS = ("bm25", "dense", "hybrid")
 METRICS = {
@@ -323,6 +323,19 @@ def lineage(num: Numbers, res: Path, files: dict) -> dict[str, str]:
     return {"tab_lineage": table("ll" + "rrr" + "r" * len(qsets), header, rows, rules)}
 
 
+def noise(num: Numbers, res: Path, files: dict) -> None:
+    r = load(res / "rfc_recency_noise.json")
+    if not r:
+        return
+    files["Recency vs. lineage under year noise"] = "rfc_recency_noise.json"
+    num["noise.seeds"] = len(r["seeds"])
+    for s in r["summary"]:
+        q = "title" if s["queries"].startswith("title") else "questions"
+        key = f"noise.{q}.{s['method']}.{round(100 * s['share'])}"
+        num[f"{key}.current1"] = p0(s["current@1"])
+        num[f"{key}.stale1"] = p0(s["stale@1"])
+
+
 def model_alias(spec: str) -> str:
     return spec.split(":", 1)[-1].split("/")[-1].split(":")[0]
 
@@ -506,6 +519,7 @@ def build(res: Path, data: Path, out: Path) -> dict[str, str]:
     tables |= answers(num, res, files)
     judge(num, res, files)
     tables |= lineage(num, res, files)
+    noise(num, res, files)
     tables |= agent(num, res, files)
     tables["agent_traces"] = agent_traces(res)
     num["meta.rev"] = git_rev()

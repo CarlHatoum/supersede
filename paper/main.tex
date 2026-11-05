@@ -103,10 +103,11 @@ and every result are public, and this draft is rebuilt from them.
 \item \textbf{Known lineage removes it.} Promoting the current version cuts
   top-1 staleness to zero, and showing both versions with the old one marked
   brings stale answers to \res{ans.blind.show_conflict.stale_outcome}.
-\item \textbf{Lineage can be inferred without metadata.} With every explicit cue
-  removed, cheap similarity and date features close
-  \res{lin.strict.logreg.title.gap} of the gap to perfect lineage
-  (Fig.~\ref{fig:lineage}).
+\item \textbf{Cheap signals are not enough.} With every explicit cue removed, a
+  similarity-and-date scorer closes \res{lin.strict.logreg.title.gap} of the gap
+  to perfect lineage, but simple newest-first ranking does about as well, and both
+  degrade together when years are missing or wrong
+  (Figs.~\ref{fig:lineage},~\ref{fig:noise}).
 \item \textbf{An agent handles the ambiguous pairs} \emph{(preliminary,
   $n{=}20$; $n{=}100$ with ablations in progress).} On pairs the scorer finds
   ambiguous, a local 9.7B-parameter agent reaches
@@ -241,6 +242,21 @@ current@1 from \res{ret.hybrid.new_title.none.current1.pct} to
 \res{ret.hybrid.new_title.promote.current1.pct} on new titles
 (Fig.~\ref{fig:retrieval}b).
 
+\paragraph{Is newest-first enough?} A fix without lineage is to prefer recent
+documents. We re-rank the hybrid's top 50 by year within a window
+(\code{newest\_first}) or by score $\times\,e^{-\lambda\cdot\text{age}}$
+(\code{time\_decay}, as in HoH~\cite{ouyang2025hoh}), with the window and
+$\lambda$ tuned on dev. With correct years, this halves staleness but stops well
+short of lineage: on new-title queries the hybrid's current@1 rises from
+\res{ret.hybrid.new_title.none.current1.pct} to
+\res{ret.hybrid.new_title.newest_first.current1.pct} (newest-first) and
+\res{ret.hybrid.new_title.time_decay.current1.pct} (time decay), against
+\res{ret.hybrid.new_title.promote.current1.pct} with \code{promote}; on
+questions, \res{qret.hybrid.newest_first.current1.pct} against
+\res{qret.hybrid.promote.current1.pct}. A newer document is not necessarily the
+replacement: it may be an unrelated, companion or partial update. Recency also
+needs correct years, which Section~\ref{sec:noise} relaxes.
+
 \Takeaway{Staleness is a property of the collection, not of a weak retriever:
 better retrieval makes it worse. Knowing the lineage removes it almost completely,
 which is why the rest of the paper is about recovering the lineage.}
@@ -322,8 +338,48 @@ closes \res{lin.strict.logreg.title.gap} of the gap on title queries
 scores, mostly pairs with near-identical titles that are companions rather than
 successors.
 
-\Takeaway{Cheap signals recover half of what lineage is worth. The other half sits in
+\Takeaway{Cheap signals recover half of what lineage is worth, about as much as
+preferring recent documents (Section~\ref{sec:noise}). The other half sits in
 ambiguous pairs that need reading, which is the agent's job.}
+
+% =========================================================================
+\section{When years are missing or wrong}\label{sec:noise}
+\final
+
+\paragraph{Setup} Recency baselines need correct years, and so does our cheap
+scorer, which uses years to orient a pair (older$\to$newer) and as a feature. We
+remove or shift (by 1--10 years) the year of a random share of documents, re-tune
+the recency parameters, and re-fit the scorer on the corrupted data, over
+\res{noise.seeds} seeds per level. Document numbers are never used for ordering,
+so they cannot leak the true order. Oracle lineage needs no years and is the
+ceiling.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{generated/fig_noise.pdf}
+\caption{current@1 of the hybrid's top 10 on test queries as a growing share of
+years is removed or shifted. Lines are means over seeds; bands span the seeds.
+Inferred lineage uses the \code{strict} setting.}
+\label{fig:noise}
+\end{figure}
+
+\paragraph{Results} With correct years, newest-first reaches
+\res{noise.title.newest_first.0.current1} current@1 on title queries and the
+inferred lineage \res{noise.title.lineage_v0.0.current1}. With half of the years
+missing or wrong, newest-first falls to \res{noise.title.newest_first.50.current1}
+and time decay to \res{noise.title.time_decay.50.current1}, while the inferred
+lineage keeps \res{noise.title.lineage_v0.50.current1}
+(Fig.~\ref{fig:noise}); on questions the corresponding values are
+\res{noise.questions.newest_first.50.current1},
+\res{noise.questions.time_decay.50.current1} and
+\res{noise.questions.lineage_v0.50.current1}.
+
+\Takeaway{The cheap scorer is \emph{not} more robust than recency: it orients pairs by
+year, so it degrades at the same rate, and with correct years simple recency
+already matches it (title queries) or beats it (questions). Both stay far below
+oracle lineage at every noise level. Closing that gap needs judgements made from
+the content, which is what the agent is for; whether the agent holds up when years
+are wrong is the next test.}
 
 % =========================================================================
 \section{Q3b: a librarian agent for the uncertain cases}\label{sec:agent}

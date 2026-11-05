@@ -25,10 +25,11 @@ from supersede.metrics import (
     stale_at_1,
     stale_before_current,
 )
-from supersede.rerank import POLICIES
+from supersede.rerank import POLICIES, RECENCY
 from supersede.retrieval import BM25, DenseRetriever, HybridRRF, Retriever
 
 K = 10
+DEPTH = 50  # candidates the recency baselines may re-rank
 RETRIEVERS = ("bm25", "dense", "hybrid")
 DENSE_MODEL = "BAAI/bge-small-en-v1.5"
 METRICS = ("stale@1", "stale_before_current", "current@1", "current@10", "mrr_current")
@@ -65,27 +66,56 @@ def build_retrievers(
     return {n: get(n) for n in names}
 
 
+def recency_ranking(name: str, scored, years, param) -> list[str]:
+    return RECENCY[name][0](scored, years, param, K)
+
+
+def tune_recency(retriever, data: Path, years: dict) -> dict[str, float]:
+    """Best parameter per recency policy, by mean current@1 on dev title queries."""
+    dev = [q for q in read_jsonl(data / "queries.jsonl") if q["split"] == "dev"]
+    hits = retriever.search_many([q["text"] for q in dev], DEPTH)
+    best = {}
+    for name, (_, _, grid) in RECENCY.items():
+
+        def mean_current(param, name=name):
+            return sum(
+                score(recency_ranking(name, h, years, param), q)["current@1"]
+                for h, q in zip(hits, dev, strict=True)
+            ) / len(dev)
+
+        best[name] = max(grid, key=mean_current)
+    return best
+
+
 def run(
     data: Path,
     split: str,
     retrievers: list[str],
     seed: int = 0,
     queries_file: str = "queries.jsonl",
+    years: dict | None = None,
 ) -> dict:
     docs = load_docs(data / "corpus.jsonl")
     graph = LineageGraph(docs)
+    years = years if years is not None else {d.doc_id: d.year for d in docs}
     index = build_retrievers(retrievers, [(d.doc_id, d.text) for d in docs], data)
     queries = [q for q in read_jsonl(data / queries_file) if split in ("all", q["split"])]
+    tuned = {name: tune_recency(r, data, years) for name, r in index.items()}
 
     rows = []
     for name, retriever in index.items():
         for variant in sorted({q["variant"] for q in queries}):
             qs = [q for q in queries if q["variant"] == variant]
-            hits = retriever.search_many([q["text"] for q in qs], K)
-            rankings = [[d for d, _ in h] for h in hits]
-            for policy, fn in POLICIES.items():
-                per_query = [score(fn(r, graph), q) for r, q in zip(rankings, qs, strict=True)]
+            deep = retriever.search_many([q["text"] for q in qs], DEPTH)
+            rankings = [[d for d, _ in h[:K]] for h in deep]
+            candidates = {p: [fn(r, graph) for r in rankings] for p, fn in POLICIES.items()}
+            for p in RECENCY:
+                candidates[p] = [recency_ranking(p, h, years, tuned[name][p]) for h in deep]
+            for policy, ranked in candidates.items():
+                per_query = [score(r, q) for r, q in zip(ranked, qs, strict=True)]
                 row = {"retriever": name, "variant": variant, "policy": policy, "n": len(qs)}
+                if policy in RECENCY:
+                    row["param"] = tuned[name][policy]
                 for m in METRICS:
                     vals = [s[m] for s in per_query]
                     row[m] = sum(vals) / len(vals) if vals else float("nan")
@@ -98,6 +128,8 @@ def run(
         "queries": queries_file,
         "retrievers": {n: r.name for n, r in index.items()},
         "k": K,
+        "recency_depth": DEPTH,
+        "recency_params": tuned,
         "split": split,
         "seed": seed,
         "index_sha256": manifest["index_sha256"],

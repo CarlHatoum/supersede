@@ -1,0 +1,3 @@
+# Night 4: downstream effect on title queries with the no-tools baseline (1,798 pairs;
+# about 40 s each, so expect most of a night).
+--variant llm_only --pairs titles --n 0
