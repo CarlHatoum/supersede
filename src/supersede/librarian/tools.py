@@ -46,6 +46,26 @@ class CorpusTools:
             "abstract": d.abstract[:MAX_ABSTRACT_CHARS] or "(no abstract)",
         }
 
+    def find_later(self, doc_id: str, k: int = 8) -> list[dict]:
+        """Other documents on the same topic as ``doc_id`` published in the same year or later.
+
+        Candidates for its replacement, best match first. Searches with the
+        document's title and keywords.
+        """
+        d = self.docs.get(doc_id)
+        if d is None:
+            return [{"error": f"unknown document {doc_id!r}"}]
+        k = max(1, min(int(k), 25))
+        query = " ".join([d.title, *d.keywords])
+        out = []
+        for hit in self.search(query, 25):
+            other = self.docs[hit["doc_id"]]
+            if other.doc_id != doc_id and (not d.year or not other.year or other.year >= d.year):
+                out.append(hit)
+            if len(out) == k:
+                break
+        return out
+
     def compare(self, doc_a: str, doc_b: str) -> dict:
         """Two documents side by side, with simple overlap signals and their date order."""
         a, b = self.docs.get(doc_a), self.docs.get(doc_b)

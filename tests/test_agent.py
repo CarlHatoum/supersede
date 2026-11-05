@@ -59,7 +59,7 @@ def test_mcp_server_serves_the_same_tools(monkeypatch):
 
     monkeypatch.setattr(mcp_server, "corpus", lambda: corpus())
     names = {t.name for t in asyncio.run(mcp_server.mcp.list_tools())}
-    assert names == {"search", "read_doc", "compare"}
+    assert names == {"search", "find_later", "read_doc", "compare"}
     result = asyncio.run(mcp_server.mcp.call_tool("read_doc", {"doc_id": "RFC2581"}))
     assert "TCP Congestion Control" in str(result)
 
@@ -156,3 +156,11 @@ def test_band_sampling_and_rates():
     m = rates(rows, lambda r: r["x"])
     assert m == {"tpr": 0.5, "tnr": 1.0, "balanced_accuracy": 0.75}
     assert est_precision(0.5, 1.0, 0.1) == 1.0
+
+
+def test_find_later_lists_later_same_topic_documents():
+    c = corpus()
+    later = [h["doc_id"] for h in c.find_later("RFC2581")]
+    assert later[0] == "RFC5681" and "RFC2581" not in later
+    assert "RFC2581" not in [h["doc_id"] for h in c.find_later("RFC5681")]
+    assert "error" in c.find_later("nope")[0]

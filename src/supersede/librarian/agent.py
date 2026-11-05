@@ -8,8 +8,8 @@ A LangGraph state machine with three stages:
 
 * ``triage`` settles pairs that the cheap scorer (librarian v0) is confident
   about, so the expensive agent only runs where it adds value (the cascade).
-* ``investigate`` is a tool-calling loop over ``search``, ``read_doc`` and
-  ``compare``, served by the MCP server or called in-process.
+* ``investigate`` is a tool-calling loop over ``search``, ``find_later``,
+  ``read_doc`` and ``compare``, served by the MCP server or called in-process.
 * ``decide`` asks for a structured verdict: supersedes / amends / unrelated /
   conflicts, with confidence and rationale.
 
@@ -35,7 +35,7 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from pydantic import BaseModel, Field
 
-PROMPT_VERSION = "agent-v1"
+PROMPT_VERSION = "agent-v2"
 LABELS = ("supersedes", "amends", "unrelated", "conflicts")
 
 SYSTEM = """You are a librarian for a collection of technical standards. Documents get replaced \
@@ -43,21 +43,30 @@ by newer versions over time, but the collection does not record which replaces w
 is to find out, for one pair of documents, whether the NEWER document supersedes the OLDER one.
 
 Labels:
-- supersedes: the newer document replaces the older one as the reference for the same topic.
+- supersedes: the newer document replaces the older one as the reference for the same topic \
+(directly, or as a later version in the same series).
 - amends: the newer document changes or extends the older one, which stays in force.
 - conflicts: they cover the same topic and disagree, but neither clearly replaces the other.
-- unrelated: different topics, or merely related work.
+- unrelated: different topics, companion documents, or merely related work.
 
-Use the tools to read both documents, compare them, and search for other documents on the same \
-topic (a third document may be the real replacement). Dates matter: a document can only be \
-superseded by a later one. Be efficient: a few tool calls are usually enough."""
+Investigate in this order:
+1. compare the two documents.
+2. find_later on the OLDER document, to see which documents could replace it.
+3. If the list shows a document that fits better as the older one's replacement, or that \
+suggests the newer one is a companion rather than a successor (for example a different \
+transport, profile, or extension of the same base), read_doc it.
+Similar titles alone are not enough: a successor covers the same scope and normally restates \
+or revises it; a companion adds something next to it. Dates matter: a document can only be \
+superseded by a later one. Stop calling tools once you can decide."""
 
 TASK = """Pair to assess:
 - OLDER: {old} ({old_title}, {old_year})
 - NEWER: {new} ({new_title}, {new_year})
 Investigate, then stop calling tools when you can decide."""
 
-DECIDE = "Give your final verdict on whether {new} supersedes {old}, based on your investigation."
+DECIDE = """Give your final verdict on whether {new} supersedes {old}, based on your \
+investigation. Confidence: 0.9 or more only if the evidence is explicit (same scope restated \
+and revised); 0.6 to 0.8 if it rests on titles, dates and overlap; below 0.6 if you are guessing."""
 
 
 class Decision(BaseModel):
@@ -83,6 +92,9 @@ def corpus_langchain_tools(corpus) -> list[BaseTool]:
         ),
         StructuredTool.from_function(
             corpus.read_doc, name="read_doc", description=corpus.read_doc.__doc__
+        ),
+        StructuredTool.from_function(
+            corpus.find_later, name="find_later", description=corpus.find_later.__doc__
         ),
         StructuredTool.from_function(
             corpus.compare, name="compare", description=corpus.compare.__doc__

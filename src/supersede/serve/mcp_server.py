@@ -44,6 +44,13 @@ def read_doc(doc_id: str) -> dict:
 
 
 @mcp.tool()
+def find_later(doc_id: str, k: int = 8) -> list[dict]:
+    """Documents on the same topic as doc_id, published the same year or later: candidate
+    replacements, best match first."""
+    return corpus().find_later(doc_id, k)
+
+
+@mcp.tool()
 def compare(doc_a: str, doc_b: str) -> dict:
     """Compare two documents side by side, with word-overlap signals and which one is older."""
     return corpus().compare(doc_a, doc_b)

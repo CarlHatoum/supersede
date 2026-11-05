@@ -86,7 +86,7 @@ async def run(args) -> dict:
     )
 
     slug = re.sub(r"[^a-z0-9]+", "-", args.model.lower()).strip("-")
-    name = f"rfc_agent_{args.setting}_{slug}"
+    name = f"rfc_agent_{args.setting}_{slug}_{PROMPT_VERSION}"
     out_dir = Path(args.out) / "agent"
     out_dir.mkdir(parents=True, exist_ok=True)
     log = out_dir / f"{name}.jsonl"

@@ -1,0 +1,50 @@
+{
+  "experiment": "agent_lineage",
+  "name": "rfc_agent_strict_ollama-edtorre-qwen3-5-hermes_agent-v2",
+  "setting": "strict",
+  "model": "ollama:edtorre/qwen3.5-hermes",
+  "prompt_version": "agent-v2",
+  "band": [
+    0.8,
+    0.98
+  ],
+  "band_positive_rate": 0.14149908592321755,
+  "band_positive_rate_lineage": 0.24753199268738574,
+  "cheap_threshold": 0.94,
+  "n_sampled": 20,
+  "n_failed": 0,
+  "labels": {
+    "amends": 2,
+    "supersedes": 10,
+    "unrelated": 8
+  },
+  "mean_steps": 3.05,
+  "mean_seconds": 118.125,
+  "n_lineage_only_positives": 3,
+  "agent": {
+    "tpr": 0.9,
+    "tnr": 0.9,
+    "balanced_accuracy": 0.9,
+    "est_precision": 0.5973246441433716
+  },
+  "cheap_scorer": {
+    "tpr": 0.4,
+    "tnr": 0.9,
+    "balanced_accuracy": 0.65,
+    "est_precision": 0.39733059548254634
+  },
+  "lineage_truth": {
+    "agent": {
+      "tpr": 0.7692307692307693,
+      "tnr": 1.0,
+      "balanced_accuracy": 0.8846153846153846,
+      "est_precision": 1.0
+    },
+    "cheap_scorer": {
+      "tpr": 0.3076923076923077,
+      "tnr": 0.8571428571428571,
+      "balanced_accuracy": 0.5824175824175823,
+      "est_precision": 0.4147013782542113
+    }
+  }
+}
