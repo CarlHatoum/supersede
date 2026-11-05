@@ -164,3 +164,13 @@ def test_find_later_lists_later_same_topic_documents():
     assert later[0] == "RFC5681" and "RFC2581" not in later
     assert "RFC2581" not in [h["doc_id"] for h in c.find_later("RFC5681")]
     assert "error" in c.find_later("nope")[0]
+
+
+def test_balanced_accuracy_ci_brackets_the_estimate():
+    from supersede.experiments.agent_lineage import balanced_accuracy_ci
+
+    rows = [{"gold": 1, "x": i < 8} for i in range(10)] + [
+        {"gold": 0, "x": i < 3} for i in range(10)
+    ]
+    lo, hi = balanced_accuracy_ci(rows, lambda r: r["x"])
+    assert lo <= 0.75 <= hi and hi - lo > 0.1

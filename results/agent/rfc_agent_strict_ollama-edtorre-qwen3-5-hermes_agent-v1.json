@@ -1,6 +1,8 @@
 {
   "experiment": "agent_lineage",
-  "name": "rfc_agent_strict_ollama-edtorre-qwen3-5-hermes",
+  "seed": 0,
+  "max_steps": 8,
+  "name": "rfc_agent_strict_ollama-edtorre-qwen3-5-hermes_agent-v1",
   "setting": "strict",
   "model": "ollama:edtorre/qwen3.5-hermes",
   "prompt_version": "agent-v1",
@@ -25,12 +27,24 @@
     "tpr": 1.0,
     "tnr": 0.7,
     "balanced_accuracy": 0.85,
+    "balanced_accuracy_ci95": [
+      0.7,
+      0.95
+    ],
+    "n_pos": 10,
+    "n_neg": 10,
     "est_precision": 0.3545904343045629
   },
   "cheap_scorer": {
     "tpr": 0.4,
     "tnr": 0.9,
     "balanced_accuracy": 0.65,
+    "balanced_accuracy_ci95": [
+      0.5,
+      0.85
+    ],
+    "n_pos": 10,
+    "n_neg": 10,
     "est_precision": 0.39733059548254634
   },
   "lineage_truth": {
@@ -38,12 +52,24 @@
       "tpr": 0.9230769230769231,
       "tnr": 0.8571428571428571,
       "balanced_accuracy": 0.8901098901098901,
+      "balanced_accuracy_ci95": [
+        0.7087912087912087,
+        1.0
+      ],
+      "n_pos": 13,
+      "n_neg": 7,
       "est_precision": 0.6800602712204922
     },
     "cheap_scorer": {
       "tpr": 0.3076923076923077,
       "tnr": 0.8571428571428571,
       "balanced_accuracy": 0.5824175824175823,
+      "balanced_accuracy_ci95": [
+        0.4010989010989011,
+        0.7362637362637363
+      ],
+      "n_pos": 13,
+      "n_neg": 7,
       "est_precision": 0.4147013782542113
     }
   }

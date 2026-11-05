@@ -70,6 +70,26 @@ def rates(rows: list[dict], predict) -> dict:
     return {"tpr": tpr, "tnr": tnr, "balanced_accuracy": (tpr + tnr) / 2}
 
 
+def balanced_accuracy_ci(
+    rows: list[dict], predict, n_resamples: int = 1000, alpha: float = 0.05, seed: int = 0
+) -> tuple[float, float]:
+    """Stratified bootstrap CI: positives and negatives are resampled separately."""
+    pos = [bool(predict(r)) for r in rows if r["gold"]]
+    neg = [not predict(r) for r in rows if not r["gold"]]
+    if not pos or not neg:
+        return (float("nan"), float("nan"))
+    rng = random.Random(seed)
+    stats = sorted(
+        (
+            sum(rng.choice(pos) for _ in pos) / len(pos)
+            + sum(rng.choice(neg) for _ in neg) / len(neg)
+        )
+        / 2
+        for _ in range(n_resamples)
+    )
+    return stats[int(alpha / 2 * n_resamples)], stats[int((1 - alpha / 2) * n_resamples) - 1]
+
+
 def est_precision(tpr: float, tnr: float, prior: float) -> float:
     tp, fp = tpr * prior, (1 - tnr) * (1 - prior)
     return tp / (tp + fp) if tp + fp else 0.0
@@ -86,11 +106,17 @@ async def run(args) -> dict:
     )
 
     slug = re.sub(r"[^a-z0-9]+", "-", args.model.lower()).strip("-")
-    name = f"rfc_agent_{args.setting}_{slug}_{PROMPT_VERSION}"
+    name = f"rfc_agent_{args.setting}_{slug}_{args.prompt_version}"
     out_dir = Path(args.out) / "agent"
     out_dir.mkdir(parents=True, exist_ok=True)
     log = out_dir / f"{name}.jsonl"
     done = {(r["old"], r["new"]): r for r in read_jsonl(log)} if log.exists() else {}
+    missing = [p for p in sample if (p["old"], p["new"]) not in done]
+    if args.prompt_version != PROMPT_VERSION and missing:
+        raise SystemExit(
+            f"{len(missing)} pairs have no logged decision for {args.prompt_version}; "
+            f"only the current prompt ({PROMPT_VERSION}) can run new pairs"
+        )
 
     corpus = load_corpus_tools(data, args.setting)
     graph = build_librarian(
@@ -128,20 +154,29 @@ async def run(args) -> dict:
     lineage_rows = [{**r, "gold": r["gold_lineage"]} for r in ok]
 
     def compare_on(rs, base_rate):
-        agent = rates(rs, lambda r: r["label"] == "supersedes")
-        cheap = rates(rs, lambda r: r["cheap_proba"] >= cs.threshold)
-        for m in (agent, cheap):
+        out = []
+        for predict in (
+            lambda r: r["label"] == "supersedes",
+            lambda r: r["cheap_proba"] >= cs.threshold,
+        ):
+            m = rates(rs, predict)
+            m["balanced_accuracy_ci95"] = balanced_accuracy_ci(rs, predict)
+            m["n_pos"] = sum(1 for r in rs if r["gold"])
+            m["n_neg"] = sum(1 for r in rs if not r["gold"])
             m["est_precision"] = est_precision(m["tpr"], m["tnr"], base_rate)
-        return agent, cheap
+            out.append(m)
+        return out
 
     agent, cheap = compare_on(ok, prior)
     agent_lin, cheap_lin = compare_on(lineage_rows, prior_lineage)
     return {
         "experiment": "agent_lineage",
+        "seed": args.seed,
+        "max_steps": args.max_steps,
         "name": name,
         "setting": args.setting,
         "model": args.model,
-        "prompt_version": PROMPT_VERSION,
+        "prompt_version": args.prompt_version,
         "band": [args.low, args.high],
         "band_positive_rate": prior,
         "band_positive_rate_lineage": prior_lineage,
@@ -160,9 +195,10 @@ async def run(args) -> dict:
 
 def to_markdown(r: dict) -> str:
     def row(truth, name, m):
+        lo, hi = m.get("balanced_accuracy_ci95", (float("nan"),) * 2)
         return (
             f"| {truth} | {name} | {m['tpr']:.2f} | {m['tnr']:.2f} "
-            f"| {m['balanced_accuracy']:.2f} | {m['est_precision']:.2f} |"
+            f"| {m['balanced_accuracy']:.2f} [{lo:.2f}, {hi:.2f}] | {m['est_precision']:.2f} |"
         )
 
     lin = r["lineage_truth"]
@@ -176,7 +212,7 @@ def to_markdown(r: dict) -> str:
             f"band's real positive rate ({r['band_positive_rate']:.2f} strict, "
             f"{r['band_positive_rate_lineage']:.2f} lineage).",
             "",
-            "| ground truth | method | TPR | TNR | balanced acc. | est. precision |",
+            "| ground truth | method | TPR | TNR | balanced acc. [95% CI] | est. precision |",
             "|---|---|---|---|---|---|",
             row("strict", "cheap scorer (librarian v0)", r["cheap_scorer"]),
             row("strict", "librarian agent", r["agent"]),
@@ -204,6 +240,11 @@ def main() -> None:
     ap.add_argument("--max-steps", type=int, default=8)
     ap.add_argument("--concurrency", type=int, default=1)
     ap.add_argument("--out", default="results")
+    ap.add_argument(
+        "--prompt-version",
+        default=PROMPT_VERSION,
+        help="rescore a finished run of an older prompt from its log (no model calls)",
+    )
     args = ap.parse_args()
 
     result = asyncio.run(run(args))

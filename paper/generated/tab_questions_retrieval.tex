@@ -1,0 +1,17 @@
+\begin{tabular}{llll}
+\toprule
+retriever & policy & stale@1$\downarrow$ [95\% CI] & current@1$\uparrow$ \\
+\midrule
+bm25 & \texttt{none} & 0.565 [0.449, 0.681] & 0.362 [0.261, 0.478] \\
+ & \texttt{filter} & 0.000 [0.000, 0.000] & 0.768 [0.667, 0.870] \\
+ & \texttt{promote} & 0.000 [0.000, 0.000] & 0.928 [0.870, 0.986] \\
+\midrule
+dense & \texttt{none} & 0.551 [0.435, 0.667] & 0.304 [0.203, 0.420] \\
+ & \texttt{filter} & 0.000 [0.000, 0.000] & 0.681 [0.565, 0.783] \\
+ & \texttt{promote} & 0.000 [0.000, 0.000] & 0.841 [0.754, 0.913] \\
+\midrule
+hybrid & \texttt{none} & 0.652 [0.536, 0.768] & 0.261 [0.159, 0.362] \\
+ & \texttt{filter} & 0.000 [0.000, 0.000] & 0.783 [0.681, 0.870] \\
+ & \texttt{promote} & 0.000 [0.000, 0.000] & 0.913 [0.841, 0.971] \\
+\bottomrule
+\end{tabular}

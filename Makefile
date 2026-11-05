@@ -7,7 +7,7 @@ QUESTIONS_LIMIT ?= 300
 LLM_BACKEND ?= claude-cli
 LLM_MODEL ?= claude-sonnet-5-5
 
-.PHONY: install test lint data questions answers lineage reproduce
+.PHONY: install test lint data questions answers lineage reproduce paper
 
 install:
 	uv venv -p 3.12 .venv && uv pip install --python $(PY) -e '.[dev,dense,agent]'
@@ -41,3 +41,9 @@ answers:
 
 lineage:
 	$(PY) -m supersede.experiments.lineage_inference --data data/rfc
+
+# Regenerates every number and table from results/, then compiles paper/main.pdf.
+TECTONIC ?= $(shell command -v tectonic || echo /opt/homebrew/bin/tectonic)
+paper:
+	$(PY) -m supersede.report.paper --results results --data data/rfc --out paper/generated
+	$(TECTONIC) --keep-logs -o paper paper/main.tex

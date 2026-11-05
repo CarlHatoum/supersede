@@ -66,3 +66,11 @@ Then:
 
 ## Known constraints
 - Claude Code CLI 2.1.68 can't use Opus 5.5 (needs 2.1.280 or newer, via `claude update`). Haiku and Sonnet 5.5 work.
+
+## Paper (living draft, synced with results)
+
+- `make paper` regenerates every number and table from `results/` (`python -m supersede.report.paper` → `paper/generated/`) and compiles `paper/main.pdf` with Tectonic (`brew install tectonic`).
+- In `paper/main.tex`, numbers are written as `\res{key}` (keys are in `paper/generated/numbers.tex`). A missing result prints as a red **??**, so pending runs are visible. Each section carries a `\status{...}` tag (final / preliminary).
+- After any experiment: `make paper`, then commit the results, `paper/generated/` and `paper/main.pdf` together.
+- Agent runs are rescored from their logs with no model calls: `python -m supersede.experiments.agent_lineage --prompt-version agent-v1 --n 20`.
+- Agent models are local only (Ollama): `ministral-3:8b` (main), `edtorre/qwen3.5-hermes` (comparison). No API key.
