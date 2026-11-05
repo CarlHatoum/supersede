@@ -283,7 +283,7 @@ def _model_style(model: str, prompt: str):
 
 def fig_agent(res: Path, out: Path) -> bool:
     runs = []
-    for p in sorted((res / "agent").glob("*.json")):
+    for p in sorted((res / "agent" / "history").glob("*.json")):
         r = json.loads(p.read_text())
         if r.get("experiment") == "agent_lineage" and r["agent"].get("balanced_accuracy_ci95"):
             runs.append(r)

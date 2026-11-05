@@ -1,0 +1,4 @@
+# Night 1: Qwen 3.5, the three variants on the same 100 nested band pairs.
+--variant llm_only --n 100
+--variant no_find_later --n 100
+--variant full --n 100

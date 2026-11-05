@@ -5,3 +5,4 @@ __pycache__/
 data/
 paper/main.log
 dist/
+results/agent/logs/

@@ -38,9 +38,10 @@ from pydantic import BaseModel, Field
 PROMPT_VERSION = "agent-v2"
 LABELS = ("supersedes", "amends", "unrelated", "conflicts")
 
-SYSTEM = """You are a librarian for a collection of technical standards. Documents get replaced \
-by newer versions over time, but the collection does not record which replaces which. Your job \
-is to find out, for one pair of documents, whether the NEWER document supersedes the OLDER one.
+SYSTEM_BASE = """You are a librarian for a collection of technical standards. Documents get \
+replaced by newer versions over time, but the collection does not record which replaces which. \
+Your job is to find out, for one pair of documents, whether the NEWER document supersedes the \
+OLDER one.
 
 Labels:
 - supersedes: the newer document replaces the older one as the reference for the same topic \
@@ -48,16 +49,44 @@ Labels:
 - amends: the newer document changes or extends the older one, which stays in force.
 - conflicts: they cover the same topic and disagree, but neither clearly replaces the other.
 - unrelated: different topics, companion documents, or merely related work.
+"""
 
+CAUTION = """Similar titles alone are not enough: a successor covers the same scope and normally \
+restates or revises it; a companion adds something next to it. Dates matter: a document can only \
+be superseded by a later one."""
+
+PROCEDURE_FULL = """
 Investigate in this order:
 1. compare the two documents.
 2. find_later on the OLDER document, to see which documents could replace it.
 3. If the list shows a document that fits better as the older one's replacement, or that \
 suggests the newer one is a companion rather than a successor (for example a different \
 transport, profile, or extension of the same base), read_doc it.
-Similar titles alone are not enough: a successor covers the same scope and normally restates \
-or revises it; a companion adds something next to it. Dates matter: a document can only be \
-superseded by a later one. Stop calling tools once you can decide."""
+"""
+
+PROCEDURE_NO_FIND_LATER = """
+Investigate in this order:
+1. compare the two documents.
+2. If needed, search for other documents on the same topic and read_doc the relevant ones.
+"""
+
+SYSTEM = SYSTEM_BASE + PROCEDURE_FULL + CAUTION + " Stop calling tools once you can decide."
+SYSTEM_NO_FIND_LATER = (
+    SYSTEM_BASE + PROCEDURE_NO_FIND_LATER + CAUTION + " Stop calling tools once you can decide."
+)
+SYSTEM_LLM_ONLY = SYSTEM_BASE + "\n" + CAUTION
+
+VARIANTS = ("full", "no_find_later", "llm_only")
+
+ONE_SHOT = """Pair to assess:
+
+OLDER document:
+{old_doc}
+
+NEWER document:
+{new_doc}
+
+Does the NEWER document supersede the OLDER one?"""
 
 TASK = """Pair to assess:
 - OLDER: {old} ({old_title}, {old_year})
@@ -84,9 +113,9 @@ class LibrarianState(TypedDict, total=False):
     decision: dict
 
 
-def corpus_langchain_tools(corpus) -> list[BaseTool]:
+def corpus_langchain_tools(corpus, exclude: tuple[str, ...] = ()) -> list[BaseTool]:
     """In-process LangChain tools over a ``CorpusTools`` (same contract as the MCP server)."""
-    return [
+    tools = [
         StructuredTool.from_function(
             corpus.search, name="search", description=corpus.search.__doc__
         ),
@@ -100,6 +129,7 @@ def corpus_langchain_tools(corpus) -> list[BaseTool]:
             corpus.compare, name="compare", description=corpus.compare.__doc__
         ),
     ]
+    return [t for t in tools if t.name not in exclude]
 
 
 async def mcp_tools(data: str = "data/rfc", setting: str = "masked") -> list[BaseTool]:
@@ -133,6 +163,7 @@ def build_librarian(
     low: float = 0.2,
     high: float = 0.9,
     max_steps: int = 8,
+    system: str = SYSTEM,
 ):
     """Compile the librarian graph.
 
@@ -141,7 +172,7 @@ def build_librarian(
     without calling the model.
     """
     tool_model = model.bind_tools(tools)
-    judge = model.with_structured_output(Decision)
+    judge = model.with_structured_output(Decision, include_raw=True)
 
     def triage(state: LibrarianState) -> dict:
         score = state.get("score")
@@ -152,7 +183,7 @@ def build_librarian(
         old, new = state["old"], state["new"]
         (ot, oy), (nt, ny) = (describe(old), describe(new)) if describe else (("?", "?"),) * 2
         task = TASK.format(old=old, new=new, old_title=ot, old_year=oy, new_title=nt, new_year=ny)
-        return {"messages": [SystemMessage(SYSTEM), HumanMessage(task)], "steps": 0}
+        return {"messages": [SystemMessage(system), HumanMessage(task)], "steps": 0}
 
     async def investigate(state: LibrarianState) -> dict:
         reply = await tool_model.ainvoke(state["messages"])
@@ -160,8 +191,17 @@ def build_librarian(
 
     async def decide(state: LibrarianState) -> dict:
         prompt = HumanMessage(DECIDE.format(old=state["old"], new=state["new"]))
-        verdict: Decision = await judge.ainvoke([*state["messages"], prompt])
-        return {"decision": {**verdict.model_dump(), "source": "agent", "steps": state["steps"]}}
+        verdict, raw = _parse(await judge.ainvoke([*state["messages"], prompt]))
+        tokens = _tokens([*state["messages"], raw])
+        return {
+            "decision": {
+                **verdict.model_dump(),
+                "source": "agent",
+                "steps": state["steps"],
+                "calls": state["steps"] + 1,
+                **tokens,
+            }
+        }
 
     def after_triage(state: LibrarianState) -> str:
         return END if state.get("decision") else "investigate"
@@ -184,6 +224,70 @@ def build_librarian(
     return graph.compile()
 
 
+def _parse(result) -> tuple[Decision, Any]:
+    """``with_structured_output(include_raw=True)`` returns a dict; fakes may return the model."""
+    if isinstance(result, dict):
+        if result.get("parsed") is None:
+            raise ValueError(f"unparseable verdict: {result.get('parsing_error')}")
+        return result["parsed"], result.get("raw")
+    return result, None
+
+
+def _tokens(messages) -> dict:
+    """Input and output tokens summed over the model's replies (when the backend reports them)."""
+    tin = tout = 0
+    for m in messages:
+        usage = getattr(m, "usage_metadata", None) or {}
+        tin += usage.get("input_tokens", 0)
+        tout += usage.get("output_tokens", 0)
+    return {"input_tokens": tin, "output_tokens": tout}
+
+
+class LLMOnly:
+    """Baseline without tools: one structured call on both documents (``read_doc`` payloads)."""
+
+    def __init__(self, model, read_doc):
+        self.judge = model.with_structured_output(Decision, include_raw=True)
+        self.read_doc = read_doc
+
+    async def ainvoke(self, state: dict) -> dict:
+        old, new = state["old"], state["new"]
+        task = ONE_SHOT.format(
+            old_doc=json.dumps(self.read_doc(old), indent=1),
+            new_doc=json.dumps(self.read_doc(new), indent=1),
+        )
+        prompt = HumanMessage(task + "\n\n" + DECIDE.format(old=old, new=new))
+        messages = [SystemMessage(SYSTEM_LLM_ONLY), prompt]
+        verdict, raw = _parse(await self.judge.ainvoke(messages))
+        decision = {
+            **verdict.model_dump(),
+            "source": "llm_only",
+            "steps": 0,
+            "calls": 1,
+            **_tokens([raw]),
+        }
+        return {"decision": decision, "messages": messages}
+
+
+def build_variant(variant: str, model, corpus, max_steps: int = 8):
+    """The librarian in one of ``VARIANTS``, over a ``CorpusTools``."""
+
+    def describe(doc_id: str):
+        d = corpus.read_doc(doc_id)
+        return d.get("title", "?"), d.get("year", "?")
+
+    if variant == "full":
+        return build_librarian(model, corpus_langchain_tools(corpus), describe, max_steps=max_steps)
+    if variant == "no_find_later":
+        tools = corpus_langchain_tools(corpus, exclude=("find_later",))
+        return build_librarian(
+            model, tools, describe, max_steps=max_steps, system=SYSTEM_NO_FIND_LATER
+        )
+    if variant == "llm_only":
+        return LLMOnly(model, corpus.read_doc)
+    raise ValueError(f"unknown variant {variant!r}; choose from {VARIANTS}")
+
+
 def _verdict(label: str, confidence: float, rationale: str) -> dict:
     return {
         "label": label,
@@ -194,13 +298,16 @@ def _verdict(label: str, confidence: float, rationale: str) -> dict:
     }
 
 
-def make_chat_model(spec: str, temperature: float = 0.0):
-    """``ollama:<model>`` or ``mistral:<model>``."""
+def make_chat_model(
+    spec: str, temperature: float = 0.0, seed: int = 0, base_url: str | None = None
+):
+    """``ollama:<model>`` or ``mistral:<model>``. ``base_url`` points at a remote Ollama."""
     provider, _, name = spec.partition(":")
     if provider == "ollama":
         from langchain_ollama import ChatOllama
 
-        return ChatOllama(model=name, temperature=temperature, reasoning=False, seed=0)
+        extra = {"base_url": base_url} if base_url else {}
+        return ChatOllama(model=name, temperature=temperature, reasoning=False, seed=seed, **extra)
     if provider == "mistral":
         from langchain_mistralai import ChatMistralAI
 

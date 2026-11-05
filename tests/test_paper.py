@@ -17,7 +17,7 @@ def test_numbers_reject_tex_specials():
 
 def test_build_from_agent_results(tmp_path):
     res, data, out = tmp_path / "results", tmp_path / "data", tmp_path / "gen"
-    (res / "agent").mkdir(parents=True)
+    (res / "agent" / "history").mkdir(parents=True)
     data.mkdir()
     m = {
         "tpr": 0.9,
@@ -44,7 +44,7 @@ def test_build_from_agent_results(tmp_path):
         "cheap_scorer": m,
         "lineage_truth": {"agent": m, "cheap_scorer": m},
     }
-    (res / "agent" / "run.json").write_text(json.dumps(run))
+    (res / "agent" / "history" / "run.json").write_text(json.dumps(run))
     rows = [
         {
             "old": "A",
@@ -56,7 +56,7 @@ def test_build_from_agent_results(tmp_path):
             "trace": ["→ compare({})"],
         },
     ]
-    (res / "agent" / "run.jsonl").write_text("\n".join(json.dumps(r) for r in rows))
+    (res / "agent" / "history" / "run.jsonl").write_text("\n".join(json.dumps(r) for r in rows))
     values = build(res, data, out)
     assert values["agent.model-x.agent-v2.strict.ba"] == "0.85"
     assert values["agent.model-x.agent-v2.strict.ba.ci"] == "[0.70, 0.95]"

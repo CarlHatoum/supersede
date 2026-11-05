@@ -73,7 +73,7 @@ class ScriptedModel:
     def bind_tools(self, tools):
         return self
 
-    def with_structured_output(self, schema):
+    def with_structured_output(self, schema, **kwargs):
         outer = self
 
         class Judge:
@@ -174,3 +174,53 @@ def test_balanced_accuracy_ci_brackets_the_estimate():
     ]
     lo, hi = balanced_accuracy_ci(rows, lambda r: r["x"])
     assert lo <= 0.75 <= hi and hi - lo > 0.1
+
+
+def test_band_sample_is_nested_and_balanced():
+    from types import SimpleNamespace
+
+    from supersede.experiments.agent_lineage import sample_band
+
+    n_pairs = 60
+    cs = SimpleNamespace(
+        pairs=[("a", str(i)) for i in range(n_pairs)],
+        y=[int(i % 3 == 0) for i in range(n_pairs)],
+        split=["test"] * n_pairs,
+        proba=[0.9] * n_pairs,
+    )
+    small, _, _ = sample_band(cs, 0.8, 0.98, n=6)
+    large, _, _ = sample_band(cs, 0.8, 0.98, n=20)
+    assert small == large[:6]
+    assert sum(p["gold"] for p in small) == 3 and sum(p["gold"] for p in large) == 10
+
+
+def test_variants_build_and_llm_only_makes_one_call():
+    from supersede.librarian.agent import build_variant
+
+    verdict = Decision(label="supersedes", confidence=0.7, rationale="same scope")
+    model = ScriptedModel([], verdict)
+    graph = build_variant("llm_only", model, corpus())
+    state = asyncio.run(graph.ainvoke({"old": "RFC2581", "new": "RFC5681", "score": None}))
+    assert state["decision"]["label"] == "supersedes" and state["decision"]["calls"] == 1
+    assert len(model.seen) == 1 and "RFC5681" in model.seen[0][-1].content
+    for variant in ("full", "no_find_later"):
+        assert build_variant(variant, ScriptedModel([], verdict), corpus()) is not None
+    tools = {t.name for t in corpus_langchain_tools(corpus(), exclude=("find_later",))}
+    assert tools == {"search", "read_doc", "compare"}
+
+
+def test_decision_log_names_and_cache(tmp_path):
+    import json
+
+    from supersede.experiments.agent_lineage import decision_log, load_decisions
+
+    p = decision_log(tmp_path, "strict", "ollama:org/m", "llm_only", "agent-v2", 0.3, 1)
+    assert p.name == "strict_ollama-org-m_llm_only_agent-v2_t0.3_r1.jsonl"
+    p.parent.mkdir(parents=True)
+    p.write_text(
+        json.dumps({"old": "a", "new": "b", "label": "amends"})
+        + "\n"
+        + json.dumps({"old": "a", "new": "c", "label": None})
+        + "\n"
+    )
+    assert set(load_decisions(p)) == {("a", "b")}

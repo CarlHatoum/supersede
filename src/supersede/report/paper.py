@@ -329,7 +329,7 @@ def model_alias(spec: str) -> str:
 
 def agent(num: Numbers, res: Path, files: dict) -> dict[str, str]:
     runs = []
-    for p in sorted((res / "agent").glob("*.json")):
+    for p in sorted((res / "agent" / "history").glob("*.json")):
         r = json.loads(p.read_text())
         if r.get("experiment") != "agent_lineage":
             continue
@@ -339,7 +339,9 @@ def agent(num: Numbers, res: Path, files: dict) -> dict[str, str]:
     rows, log_rows = [], []
     cheap_done = set()
     for p, r in runs:
-        files[f"Agent: {model_alias(r['model'])}, {r['prompt_version']}"] = "agent/" + p.name
+        files[f"Agent: {model_alias(r['model'])}, {r['prompt_version']}"] = (
+            "agent/history/" + p.name
+        )
         base = f"agent.{model_alias(r['model'])}.{r['prompt_version']}"
         num[f"{base}.n"] = r["n_sampled"]
         num[f"{base}.steps"] = f"{r['mean_steps']:.1f}"
@@ -423,7 +425,7 @@ def agent_traces(res: Path) -> str:
     """Verbatim traces for each finished agent run: a correct positive, a correct
     negative and an error, when the run has them."""
     out = []
-    for summary in sorted((res / "agent").glob("*.json")):
+    for summary in sorted((res / "agent" / "history").glob("*.json")):
         r = json.loads(summary.read_text())
         log = summary.with_suffix(".jsonl")
         if r.get("experiment") != "agent_lineage" or not log.exists():
