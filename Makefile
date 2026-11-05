@@ -7,10 +7,10 @@ QUESTIONS_LIMIT ?= 300
 LLM_BACKEND ?= claude-cli
 LLM_MODEL ?= claude-sonnet-5-5
 
-.PHONY: install test lint data questions answers lineage reproduce paper
+.PHONY: install test lint data questions answers lineage reproduce paper hf
 
 install:
-	uv venv -p 3.12 .venv && uv pip install --python $(PY) -e '.[dev,dense,agent]'
+	uv venv -p 3.12 .venv && uv pip install --python $(PY) -e '.[dev,dense,agent,hub]'
 
 test:
 	$(PY) -m pytest -q
@@ -47,3 +47,8 @@ TECTONIC ?= $(shell command -v tectonic || echo /opt/homebrew/bin/tectonic)
 paper:
 	$(PY) -m supersede.report.paper --results results --data data/rfc --out paper/generated
 	$(TECTONIC) --keep-logs -o paper paper/main.tex
+
+# Builds the Hugging Face dataset folder in dist/hf/ (no upload).
+# Upload: $(PY) -m supersede.bench.export_hf --push <user>/supersede-bench [--private]
+hf:
+	$(PY) -m supersede.bench.export_hf --data data/rfc --out dist/hf/supersede-bench
