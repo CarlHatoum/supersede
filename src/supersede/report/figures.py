@@ -251,7 +251,7 @@ def fig_lineage(res: Path, out: Path) -> bool:
         1, len(qsets), figsize=(WIDTH, 1.6), sharey=True, gridspec_kw={"wspace": 0.08}
     )
     axes = [axes] if len(qsets) == 1 else axes
-    marks = [("heuristic", ORANGE, "s"), ("logreg", BLUE, "o")]
+    marks = [("heuristic", ORANGE, "s"), ("version_chains", AQUA, "^"), ("logreg", BLUE, "o")]
     for ax, q in zip(axes, qsets, strict=True):
         for i, s in enumerate(r):
             d = s["downstream"][q]
@@ -260,6 +260,8 @@ def fig_lineage(res: Path, out: Path) -> bool:
             ax.scatter([lo], [i], s=24, color="white", edgecolor=GREY, lw=1.2, zorder=3)
             ax.scatter([hi], [i], s=28, color=INK, marker="|", lw=1.6, zorder=3)
             for m, colour, shape in marks:
+                if m not in d:
+                    continue
                 x = d[m]["current@1"]
                 ax.scatter(
                     [x], [i], s=30, color=colour, marker=shape, edgecolor="white", lw=1, zorder=4
@@ -283,6 +285,7 @@ def fig_lineage(res: Path, out: Path) -> bool:
         handles=[
             Line2D([], [], ls="", marker="o", mfc="white", mec=GREY, label="no lineage"),
             Line2D([], [], ls="", marker="s", mfc=ORANGE, mec="white", label="heuristic"),
+            Line2D([], [], ls="", marker="^", mfc=AQUA, mec="white", label="version chains"),
             Line2D([], [], ls="", marker="o", mfc=BLUE, mec="white", label="logistic regression"),
             Line2D([], [], ls="", marker="|", color=INK, mew=1.6, label="oracle lineage"),
         ],

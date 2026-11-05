@@ -159,9 +159,10 @@ async def run(args) -> dict:
         if args.n:
             pairs = pairs[: args.n]
 
+    tag = args.setting + (f"-noise{round(100 * args.year_noise)}" if args.year_noise else "")
     log = decision_log(
         args.out,
-        args.setting,
+        tag,
         args.model,
         args.variant,
         args.prompt_version,
@@ -175,7 +176,7 @@ async def run(args) -> dict:
     if todo and args.prompt_version != PROMPT_VERSION:
         raise SystemExit(f"only the current prompt ({PROMPT_VERSION}) can run new pairs")
 
-    corpus = load_corpus_tools(data, args.setting)
+    corpus = load_corpus_tools(data, args.setting, year_noise=args.year_noise)
     model = make_chat_model(args.model, temperature=args.temperature, seed=args.run)
     graph = build_variant(args.variant, model, corpus, max_steps=args.max_steps)
     gate = asyncio.Semaphore(args.concurrency)
@@ -242,6 +243,12 @@ def main() -> None:
     ap.add_argument("--concurrency", type=int, default=1)
     ap.add_argument("--out", default="results")
     ap.add_argument("--prompt-version", default=PROMPT_VERSION)
+    ap.add_argument(
+        "--year-noise",
+        type=float,
+        default=0.0,
+        help="share of documents whose year the agent sees removed or shifted (seed 0)",
+    )
     args = ap.parse_args()
     print(json.dumps(asyncio.run(run(args)), indent=2))
 

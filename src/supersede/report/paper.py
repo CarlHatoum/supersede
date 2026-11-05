@@ -303,7 +303,7 @@ def lineage(num: Numbers, res: Path, files: dict) -> dict[str, str]:
         qsets = list(s["downstream"])
         if rows:
             rules.append(len(rows))
-        for m in ("no_lineage", "heuristic", "logreg", "oracle"):
+        for m in ("no_lineage", "heuristic", "version_chains", "logreg", "oracle"):
             e = s["methods"].get(m, {}).get("edges")
             if e:
                 for k in ("precision", "recall", "f1"):

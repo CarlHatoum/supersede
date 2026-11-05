@@ -19,9 +19,21 @@ MAX_ABSTRACT_CHARS = 2000
 
 
 class CorpusTools:
-    def __init__(self, docs: list[Doc], retriever: Retriever, setting: str = "masked"):
+    def __init__(
+        self,
+        docs: list[Doc],
+        retriever: Retriever,
+        setting: str = "masked",
+        years: dict[str, int | None] | None = None,
+    ):
+        """``years`` overrides publication years (to test the agent when dates are wrong)."""
+        from dataclasses import replace
+
         self.setting = setting
-        self.docs = {d.doc_id: d for d in masking.apply(docs, setting)}
+        shown = masking.apply(docs, setting)
+        if years is not None:
+            shown = [replace(d, year=years.get(d.doc_id)) for d in shown]
+        self.docs = {d.doc_id: d for d in shown}
         self.retriever = retriever
 
     def _card(self, d: Doc) -> dict:
@@ -89,7 +101,9 @@ def _overlap(x: str, y: str) -> float:
     return round(_jaccard(set(tokenize(x)), set(tokenize(y))), 3)
 
 
-def load_corpus_tools(data, setting: str = "masked", retriever: str = "hybrid") -> CorpusTools:
+def load_corpus_tools(
+    data, setting: str = "masked", retriever: str = "hybrid", year_noise: float = 0.0, seed: int = 0
+) -> CorpusTools:
     """Corpus tools over ``data/corpus.jsonl``, searching the same (masked or declared) text."""
     from pathlib import Path
 
@@ -100,4 +114,9 @@ def load_corpus_tools(data, setting: str = "masked", retriever: str = "hybrid") 
     docs = load_docs(data / "corpus.jsonl")
     shown = masking.apply(docs, setting)
     index = build_retrievers([retriever], [(d.doc_id, d.text) for d in shown], data)[retriever]
-    return CorpusTools(docs, index, setting)
+    years = None
+    if year_noise:
+        from supersede.experiments.recency_noise import corrupt_years
+
+        years = corrupt_years(docs, year_noise, seed)
+    return CorpusTools(docs, index, setting, years=years)

@@ -70,3 +70,36 @@ def edge_prf(predicted: set, gold: set) -> dict[str, float]:
     p = tp / len(predicted) if predicted else 0.0
     r = tp / len(gold) if gold else 0.0
     return {"precision": p, "recall": r, "f1": 2 * p * r / (p + r) if p + r else 0.0, "tp": tp}
+
+
+def version_chains(
+    pairs: Sequence[tuple[str, str]], sims: Sequence[float], tau: float, order: dict
+) -> list[tuple[str, str]]:
+    """Version-family baseline (in the style of Modani et al., 2021).
+
+    Pairs at least ``tau`` similar are linked; each connected component is a
+    version family, ordered by ``order`` (publication order), and consecutive
+    members become edges old -> new.
+    """
+    parent: dict[str, str] = {}
+
+    def find(x: str) -> str:
+        parent.setdefault(x, x)
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for (a, b), s in zip(pairs, sims, strict=True):
+        if s >= tau:
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                parent[ra] = rb
+    families: dict[str, list[str]] = {}
+    for x in parent:
+        families.setdefault(find(x), []).append(x)
+    edges = []
+    for members in families.values():
+        members.sort(key=lambda d: order[d])
+        edges.extend(zip(members, members[1:], strict=False))
+    return sorted(edges)

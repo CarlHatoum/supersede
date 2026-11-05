@@ -101,3 +101,14 @@ def test_corrupt_years_and_year_only_order():
     # Order ignores document numbers: same year, so the hash decides, not 1 < 2.
     a, b = Doc("RFC1", "t", year=2000), Doc("RFC2", "t", year=2000)
     assert year_only_order(a)[0] == year_only_order(b)[0] == 2000
+
+
+def test_version_chains_link_similar_documents_in_order():
+    from supersede.librarian.classifiers import version_chains
+
+    pairs = [("a", "b"), ("b", "c"), ("a", "c"), ("x", "y")]
+    sims = [0.95, 0.92, 0.9, 0.5]
+    order = {"a": 1, "b": 2, "c": 3, "x": 4, "y": 5}
+    assert version_chains(pairs, sims, 0.9, order) == [("a", "b"), ("b", "c")]
+    assert version_chains(pairs, sims, 0.4, order) == [("a", "b"), ("b", "c"), ("x", "y")]
+    assert version_chains(pairs, sims, 0.99, order) == []

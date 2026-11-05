@@ -236,3 +236,31 @@ def test_mcnemar_exact_and_paired_diff():
     rows += [{"gold": 0, "a": False, "b": False} for _ in range(10)]
     lo, hi = paired_ba_diff_ci(rows, lambda r: r["a"], lambda r: r["b"])
     assert 0 < lo <= 0.4 <= hi
+
+
+def test_cascade_scores_override_only_decided_band_pairs():
+    from types import SimpleNamespace
+
+    from supersede.experiments.agent_downstream import cascade_scores
+
+    cs = SimpleNamespace(
+        pairs=[("a", "b"), ("a", "c"), ("d", "e"), ("f", "g")],
+        split=["test", "test", "dev", "test"],
+        proba=[0.85, 0.90, 0.85, 0.99],
+    )
+    decisions = {
+        ("a", "b"): {"label": "unrelated"},
+        ("a", "c"): {"label": "supersedes"},
+        ("d", "e"): {"label": "supersedes"},  # dev pair: ignored
+        ("f", "g"): {"label": "unrelated"},  # outside the band: ignored
+    }
+    scores, used = cascade_scores(cs, decisions, 0.8, 0.98)
+    assert scores == [0.0, 1.0, 0.85, 0.99] and used == 2
+
+
+def test_corpus_tools_year_override():
+    c = CorpusTools(
+        DOCS, BM25([(d.doc_id, d.text) for d in DOCS]), "strict", years={"RFC2581": None}
+    )
+    assert c.read_doc("RFC2581")["year"] is None and c.read_doc("RFC5681")["year"] is None
+    assert c.compare("RFC2581", "RFC5681")["older"] == "unknown"

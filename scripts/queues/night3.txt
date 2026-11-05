@@ -2,3 +2,6 @@
 # whose older document appears in the hybrid top 10 of a test question (203 pairs,
 # minus those already decided in the sample runs).
 --variant full --pairs questions --n 0
+# Agent under year noise: the agent sees wrong or missing years for 50% of documents.
+--variant llm_only --n 100 --year-noise 0.5
+--variant full --n 100 --year-noise 0.5

@@ -33,6 +33,7 @@ from supersede.librarian.classifiers import (
     edge_prf,
     heuristic_score,
     select_edges,
+    version_chains,
 )
 from supersede.librarian.features import pair_features
 from supersede.lineage import LineageGraph
@@ -149,7 +150,28 @@ def run_setting(setting: str, data: Path, docs_orig, gold: LineageGraph, ranking
     proba, best_t, model = cs.proba, cs.threshold, cs.model
     predicted_lr, prf_lr = evaluate(proba, best_t)
 
+    # Version-family baseline: similarity clusters chained in publication order.
+    from supersede.librarian.candidates import doc_order
+
+    order = {d.doc_id: doc_order(d) for d in docs_orig}
+    sims = [max(f["title_cos"], f["text_cos"]) for f in feats]
+    gold_dev = {e for e in gold_edges if gold_split[e] == "dev"}
+
+    def chains_f1(tau):
+        pred = version_chains(pairs, sims, tau, order)
+        pred = {e for e in pred if split_of(gold.component(e[0])) == "dev"}
+        return edge_prf(pred, gold_dev)["f1"]
+
+    taus = [t / 100 for t in range(80, 100)]
+    best_tau = max(taus, key=chains_f1)
+    predicted_vc = version_chains(pairs, sims, best_tau, order)
+    gold_test = {e for e in gold_edges if gold_split[e] == "test"}
+    prf_vc = edge_prf(
+        {e for e in predicted_vc if split_of(gold.component(e[0])) == "test"}, gold_test
+    )
+
     result["methods"]["heuristic"] = {"edges": prf_h}
+    result["methods"]["version_chains"] = {"edges": prf_vc, "tau": best_tau}
     result["methods"]["logreg"] = {
         "edges": prf_lr,
         "threshold": best_t,
@@ -159,6 +181,7 @@ def run_setting(setting: str, data: Path, docs_orig, gold: LineageGraph, ranking
     graphs = {
         "no_lineage": None,
         "heuristic": LineageGraph.from_edges(docs_orig, predicted_h),
+        "version_chains": LineageGraph.from_edges(docs_orig, predicted_vc),
         "logreg": LineageGraph.from_edges(docs_orig, predicted_lr),
         "oracle": gold,
     }
@@ -183,7 +206,7 @@ def to_markdown(results: list[dict]) -> str:
             + " |",
             "|---|---|---|---|" + "---|" * len(r["downstream"]),
         ]
-        for m in ("no_lineage", "heuristic", "logreg", "oracle"):
+        for m in ("no_lineage", "heuristic", "version_chains", "logreg", "oracle"):
             e = r["methods"].get(m, {}).get("edges")
             cells = (
                 [f"{e['precision']:.3f}", f"{e['recall']:.3f}", f"{e['f1']:.3f}"]
