@@ -1,396 +1,498 @@
 \documentclass[11pt,a4paper]{article}
-\usepackage[T1]{fontenc}
-\usepackage{lmodern}
-\usepackage[margin=2.4cm]{geometry}
+% Compiled with Tectonic (XeTeX): `make paper`.
+\usepackage{libertinus}
+\usepackage[margin=2.3cm,top=2.2cm,bottom=2.4cm]{geometry}
 \usepackage{microtype}
 \usepackage{booktabs}
 \usepackage{amsmath}
 \usepackage{xcolor}
 \usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{titlesec}
+\usepackage[most]{tcolorbox}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning}
-\usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,backgrounds}
+\usepackage[font=small,labelfont=bf,labelsep=period,skip=4pt]{caption}
+
+% Colours shared with the figures (CVD-validated palette, see report/figures.py).
+\definecolor{blue}{HTML}{2A78D6}
+\definecolor{bluelight}{HTML}{86B6EF}
+\definecolor{orange}{HTML}{EB6834}
+\definecolor{aqua}{HTML}{1BAF7A}
+\definecolor{ink}{HTML}{1F1F1E}
+\definecolor{ink2}{HTML}{52514E}
+\definecolor{rule}{HTML}{D6D5D0}
+\definecolor{paper}{HTML}{F6F5F1}
+\definecolor{accent}{HTML}{184F95}
+
+\usepackage[colorlinks=true,linkcolor=accent,citecolor=accent,urlcolor=accent]{hyperref}
+
+\titleformat{\section}{\sffamily\Large\bfseries\color{accent}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\sffamily\large\bfseries\color{ink}}{\thesubsection}{0.6em}{}
+\titleformat{\paragraph}[runin]{\sffamily\bfseries\color{ink}}{}{}{}[.]
+\titlespacing*{\section}{0pt}{1.6em}{0.6em}
+\titlespacing*{\paragraph}{0pt}{0.7em}{0.6em}
+\setlist{itemsep=2pt,topsep=4pt}
+\captionsetup{labelfont={bf,color=accent}}
+\setlength{\parskip}{0.25em}
+\setlength{\emergencystretch}{2em}
 
 % ---------------------------------------------------------------------------
 % Every number comes from results/ through paper/generated/numbers.tex
 % (python -m supersede.report.paper). A missing result prints as a red ??.
 \input{generated/numbers.tex}
 \newcommand{\res}[1]{\ifcsname res@#1\endcsname\csname res@#1\endcsname\else\textcolor{red}{\textbf{??}}\fi}
-% Status of each experiment, so the draft shows what is final and what is not.
-\newcommand{\status}[1]{\hfill\textcolor{gray}{\small\textsf{[#1]}}}
-\newcommand{\todo}[1]{\textcolor{orange!80!black}{[TODO: #1]}}
+\newcommand{\todo}[1]{\textcolor{orange}{[TODO: #1]}}
+\newcommand{\code}[1]{\texttt{\small #1}}
+
+% Status pill under each section title: final / preliminary / pending.
+\newcommand{\status}[2]{%
+  \par\vspace{-0.3em}{\sffamily\footnotesize
+  \tcbox[on line,colback=#1!12,colframe=#1!12,boxrule=0pt,arc=6pt,
+    left=4pt,right=4pt,top=1pt,bottom=1pt]{\textcolor{#1!70!black}{\textbf{#2}}}}\par\vspace{0.2em}}
+\newcommand{\final}[1][final]{\status{aqua}{#1}}
+\newcommand{\prelim}[1][preliminary]{\status{orange}{#1}}
+
+% Takeaway box at the end of each result section.
+\newtcolorbox{takeaway}{enhanced,colback=paper,colframe=paper,boxrule=0pt,arc=2pt,
+  borderline west={2.5pt}{0pt}{accent},left=8pt,right=8pt,top=5pt,bottom=5pt,
+  fontupper=\small,before skip=8pt,after skip=10pt}
+\newcommand{\Takeaway}[1]{\begin{takeaway}\textsf{\textbf{\color{accent}Takeaway.}} #1\end{takeaway}}
 % ---------------------------------------------------------------------------
 
-\title{Supersede: When Retrieval-Augmented Generation Cites the Obsolete Version\\[4pt]
-\large Measuring staleness, and a librarian agent that recovers document lineage}
+\title{\sffamily\bfseries\color{ink}Supersede: when RAG cites the obsolete version\\[6pt]
+\normalfont\large\color{ink2}Measuring staleness in RAG, and a librarian agent
+that recovers document lineage}
 \author{Carl Hatoum}
-\date{Living draft, built from \texttt{results/} at revision \texttt{\res{meta.rev}} on \res{meta.date}}
+\date{\small\color{ink2}Living draft. Every number is regenerated from
+\code{results/} (revision \code{\res{meta.rev}}, \res{meta.date}).}
 
 \begin{document}
 \maketitle
+\thispagestyle{empty}
 
-\begin{abstract}
-Knowledge bases accumulate documents that replace older ones, yet retrieval
-treats every version as equally valid. We build a benchmark from the IETF RFC
-index, whose ``obsoletes'' metadata gives a free, exact supersession graph over
-\res{corpus.n_docs} documents and \res{corpus.n_supersession_edges} edges. We
-show that lexical, dense and hybrid retrievers all rank the obsolete version
-first for a large share of queries, on title queries and on LLM-generated
-questions whose answer changed between versions, and that this staleness reaches
-generated answers. With lineage known, a simple promotion policy removes stale
-top results; without it, we must infer lineage. We describe a cascade: a cheap
-feature-based scorer for clear cases and a tool-using \emph{librarian agent}
-(LangGraph, tools served over the Model Context Protocol, local open-weight
-models) for the uncertain ones. \textbf{This is a living draft}: each section
-states whether its numbers are final or preliminary.
+\begin{abstract}\noindent
+Document collections keep old versions next to the documents that replace them,
+and retrieval-augmented generation (RAG) treats every version as equally valid.
+Using the IETF RFC series, whose index records which RFC replaces which, we build
+a benchmark of \res{corpus.n_docs} documents and \res{corpus.n_supersession_edges}
+replacement links. Lexical, dense and hybrid retrievers all rank the obsolete
+version first for a large share of queries, and the error reaches generated
+answers when version metadata is missing. Known lineage fixes both; unknown
+lineage must be inferred. We infer it with a cascade: a cheap feature-based scorer
+for clear cases, and a tool-using \emph{librarian agent} for the uncertain ones.
 \end{abstract}
 
-\section{Introduction}
+\begin{tcolorbox}[enhanced,colback=white,colframe=rule,boxrule=0.6pt,arc=3pt,
+  left=10pt,right=10pt,top=6pt,bottom=6pt,
+  title={\sffamily\bfseries Key findings},coltitle=accent,colbacktitle=white,
+  attach boxed title to top left={xshift=8pt,yshift=-6pt},
+  boxed title style={boxrule=0pt,colback=white,left=3pt,right=3pt}]
+\small
+\begin{enumerate}[label=\textbf{\textcolor{accent}{\arabic*}},leftmargin=1.4em]
+\item \textbf{Retrieval prefers the obsolete version.} For questions whose answer
+  changed between versions, the hybrid retriever puts the obsolete document first
+  \res{qret.hybrid.none.stale1.pct} of the time; a better retriever is \emph{more}
+  stale, not less (Fig.~\ref{fig:retrieval}).
+\item \textbf{It reaches answers when metadata is missing.} Without dates or
+  version numbers in the context, \res{ans.blind.naive.stale_outcome} of answers
+  are stale; showing both versions with the old one marked brings this to
+  \res{ans.blind.show_conflict.stale_outcome} (Fig.~\ref{fig:answers}).
+\item \textbf{Lineage can be partly inferred cheaply.} A logistic regression on
+  similarity and date features closes \res{lin.strict.logreg.title.gap} of the gap
+  to perfect lineage, with every explicit cue removed (Fig.~\ref{fig:lineage}).
+\item \textbf{An agent helps where the scorer is unsure} \emph{(preliminary,
+  $n{=}20$).} On pairs the scorer finds ambiguous, a local 9.7B-parameter agent
+  reaches \res{agent.qwen3.5-hermes.agent-v2.strict.ba} balanced accuracy against
+  \res{agent.cheap.strict.ba} for the scorer. Whether the model follows the
+  investigation procedure matters (Fig.~\ref{fig:agent}).
+\end{enumerate}
+\end{tcolorbox}
 
-Enterprise and technical document collections are not static. Standards are
-revised, procedures are reissued, and policies are cancelled and replaced. The
-old version usually stays in the collection, and nothing in a retrieval-augmented
-generation (RAG) pipeline~\cite{lewis2020rag} tells the retriever or the
-generator which version is in force. The older document is often the better
-lexical and semantic match: it has the canonical title, it was cited more, and
-the newer one may only describe its changes.
+% =========================================================================
+\section{The problem}
 
-We ask three questions.
-\begin{enumerate}
-\item \textbf{How often does retrieval surface the superseded version first?}
-  (Section~\ref{sec:retrieval}).
-\item \textbf{Does this reach the generated answer, and can answer policies
-  contain it?} (Section~\ref{sec:answers}).
-\item \textbf{When lineage is not recorded, can we recover it?} With a
-  feature-based scorer, and with a tool-using agent on the cases the scorer is
-  unsure about (Sections~\ref{sec:librarian} and~\ref{sec:agent}).
+Standards are revised, procedures reissued, policies replaced, and the old
+version usually stays in the collection. Nothing in a RAG
+pipeline~\cite{lewis2020rag} tells the retriever which version is in force, and
+the old document is often the \emph{better} match: it has the canonical title and
+states the topic plainly, while the newer one may describe its changes.
+Figure~\ref{fig:problem} shows a real case from our benchmark.
+
+\begin{figure}[!h]
+\centering
+\begin{tikzpicture}[font=\sffamily\small, node distance=4mm,
+  doc/.style={draw=rule, fill=white, rounded corners=2pt, minimum width=46mm,
+    minimum height=7.5mm, align=left, inner sep=4pt},
+  arr/.style={-{Stealth[length=2.2mm]}, ink2, line width=0.7pt}]
+\node[draw=rule, fill=paper, rounded corners=2pt, inner sep=5pt, align=center] (q)
+  {query\\\textbf{``TCP Congestion Control''}};
+\node[right=9mm of q, yshift=7mm, doc, draw=orange, line width=0.9pt] (d1)
+  {\textbf{1.}\ RFC 2581 \quad 1999 \hfill\textcolor{orange}{\textbf{obsolete}}};
+\node[below=2mm of d1, doc] (d2)
+  {\textbf{2.}\ RFC 5681 \quad 2009 \hfill\textcolor{aqua!70!black}{\textbf{current}}};
+\node[below=2mm of d2, doc, text=ink2] (d3) {\textbf{3.}\ RFC 896 \quad 1984 \hfill unrelated};
+\node[above=1mm of d1, font=\sffamily\scriptsize\bfseries, text=ink2] {hybrid retriever, top 3};
+\draw[arr] (q.east) -- (d1.west);
+\node[right=10mm of d1, yshift=-2mm, align=left, text width=46mm, font=\sffamily\small] (fix)
+  {\textcolor{orange}{\textbf{Without lineage:}} the answer cites RFC 2581.\\[4pt]
+   \textcolor{blue}{\textbf{With lineage}} (2581 $\rightarrow$ 5681): \emph{promote} puts
+   RFC 5681 first; the answer can cite it and flag the change.};
+\draw[arr] (d1.east) -- (fix.west|-d1.east);
+\draw[arr, blue, densely dashed] (d2.east) to[out=0, in=200] ([yshift=-3mm]fix.west);
+\end{tikzpicture}
+\caption{A real ranking from the benchmark. RFC 5681 replaced RFC 2581 in 2009, but
+the hybrid retriever ranks the obsolete document first. The same happens for
+TLS~1.2: the current version, RFC~9846, only comes fourth, behind two documents it
+replaced.}
+\label{fig:problem}
+\end{figure}
+
+We ask three questions:
+\begin{enumerate}[label=\textbf{Q\arabic*.}, leftmargin=2.4em]
+\item How often does retrieval surface the obsolete version first? (§\ref{sec:retrieval})
+\item Does it reach the generated answer, and can an answer policy contain it? (§\ref{sec:answers})
+\item When lineage is not recorded, can we infer it, cheaply and with an agent? (§\ref{sec:librarian}–\ref{sec:agent})
 \end{enumerate}
 
-\paragraph{Contributions.}
-(i)~A reproducible staleness benchmark built from public metadata, with
-leakage-controlled settings for lineage inference.
-(ii)~Retrieval- and answer-level staleness measurements across three retriever
-families and three answer policies.
-(iii)~A cascade for lineage inference whose second stage is a librarian agent
-with explicit tools, evaluated where the first stage is uncertain.
-(iv)~The tools are served over MCP, the same interface used in deployment.
-
-\section{Related work}
-\todo{expand; verify every reference before submission.}
-Time-sensitive question answering studies questions whose answer changes over
-time~\cite{chen2021timeqa,kasai2023realtimeqa,dhingra2022timeaware}; we study
-the document side: which version of a document is in force. Knowledge-conflict
-work examines how models resolve contradictions between parametric memory and
-context, or between passages~\cite{longpre2021entity,xie2024chameleon}; our
-conflicts have a ground-truth resolution given by the supersession graph.
-Our retrievers are BM25~\cite{robertson2009bm25}, BGE dense
-embeddings~\cite{xiao2023cpack} and reciprocal rank fusion~\cite{cormack2009rrf}.
-We use an LLM judge~\cite{zheng2023judge} validated by agreement
-statistics~\cite{cohen1960kappa}, and a ReAct-style tool loop~\cite{yao2023react}
-for the agent.
+\begin{tcolorbox}[enhanced,colback=paper,colframe=paper,arc=2pt,left=8pt,right=8pt,
+  top=5pt,bottom=5pt,title={\sffamily\bfseries\small How to read the numbers},
+  coltitle=ink,colbacktitle=paper,fontupper=\small]
+\begin{tabular}{@{}p{0.22\linewidth}p{0.72\linewidth}@{}}
+\textbf{stale@1} & share of queries whose \emph{top} result is an obsolete version (lower is better).\\
+\textbf{current@1} & share of queries whose top result is a version in force (higher is better).\\
+\textbf{lineage} & the graph of which document replaces which. \emph{Oracle} lineage is the true one, from the index.\\
+\textbf{gap closed} & how much of the improvement from no lineage to oracle lineage an inferred lineage recovers.\\
+\textbf{balanced accuracy} & the mean of the hit rate on true replacements and on non-replacements; 0.5 is chance.\\
+\textbf{[a, b]} & a 95\% bootstrap confidence interval. Overlapping intervals mean the difference is not established.\\
+\end{tabular}
+\end{tcolorbox}
 
 % =========================================================================
-\section{Benchmark}\label{sec:bench}
-\status{final for the RFC snapshot \res{corpus.sha}}
+\section{The benchmark}\label{sec:bench}
+\final[final · RFC snapshot \res{corpus.sha}]
 
-\paragraph{Corpus and lineage.} We parse the RFC index
-(\texttt{rfc-index.xml}, snapshot \texttt{\res{corpus.sha}}, built
-\res{corpus.built}). Each document has a title, an abstract (for
-\res{corpus.n_docs_with_abstract} of \res{corpus.n_docs}), keywords and a year.
-The index records \emph{obsoletes} and \emph{obsoleted-by} on both sides; we
-take an edge from either side, giving \res{corpus.n_supersession_edges}
-supersession edges over \res{corpus.n_superseded_docs} superseded documents,
-in \res{corpus.n_components} connected lineages (largest:
-\res{corpus.max_component_size} documents). \emph{Updates} relations
-(\res{corpus.n_update_edges}) are not supersession and are kept apart. The
-\emph{current versions} of a document are the heads reached by following
-successors; a split can yield several.
+\paragraph{Documents and lineage} We parse the RFC index (\code{rfc-index.xml},
+built \res{corpus.built}): \res{corpus.n_docs} RFCs, each with a title, year,
+keywords and, for \res{corpus.n_docs_with_abstract} of them, an abstract. The
+index records \emph{obsoletes} and \emph{obsoleted-by}; taking a link from either
+side gives \res{corpus.n_supersession_edges} replacement links over
+\res{corpus.n_superseded_docs} obsolete documents, forming
+\res{corpus.n_components} lineages (the largest has
+\res{corpus.max_component_size} documents). The \emph{current versions} of a
+document are the ends of its chain of replacements; a split can produce several.
+\emph{Updates} relations (\res{corpus.n_update_edges}) amend a document without
+replacing it and are not used as ground truth.
 
-\paragraph{Splits.} Every query or pair belonging to one lineage component
-falls in the same split (dev or test, by a hash of the component, 30/70), so no
-lineage is seen on both sides.
+\paragraph{Splits} All queries and pairs of one lineage share a split (30\% dev,
+70\% test), so no lineage is seen on both sides.
 
-\paragraph{Title queries.} For each edge we form two queries, the old title
-and the new title, deduplicated per component: \res{corpus.n_queries} queries
-(\res{corpus.n_queries.dev} dev, \res{corpus.n_queries.test} test). The
-correct result is any current version; any superseded member of the lineage is
-stale.
+\paragraph{Title queries} For each link, the old title and the new title are each
+used as a query: \res{corpus.n_queries} queries (\res{corpus.n_queries.test} test).
+Any current version is a correct result; any obsolete member of the lineage is stale.
 
-\paragraph{Change-aware questions.} Title queries are artificial. For a seeded
-sample of \res{qgen.attempted} of \res{qgen.candidates} eligible edges, an LLM
-(prompt \texttt{\res{qgen.prompt}}) writes a natural question whose correct
-answer \emph{differs} between the old and new abstract, with both answers and
-verbatim evidence from each. Deterministic checks reject non-verbatim evidence,
-questions that name an RFC or reveal the answer, and answers argued from
-silence. \res{qgen.accepted} questions were accepted (\res{qgen.rate});
-the model declined \res{qgen.skipped} pairs where it found no substantive change
-(Table~\ref{tab:qgen}).
+\paragraph{Change-aware questions} Title queries are artificial, so we also
+generate natural questions whose answer \emph{changed} between versions. For
+\res{qgen.attempted} sampled links, an LLM reads both abstracts and writes a
+question, the old and new answers, and verbatim evidence from each. Automatic
+checks reject evidence that is not verbatim, questions that name an RFC or give
+away the answer, and answers argued from silence. \res{qgen.accepted} questions
+pass (\res{qgen.rate}); in \res{qgen.skipped} cases the model found no
+substantive change and declined (Table~\ref{tab:qgen} in the appendix).
 
-\begin{table}[t]
-\centering\small
-\input{generated/tab_qgen.tex}
-\caption{Outcome of change-aware question generation per attempted edge.}
-\label{tab:qgen}
-\end{table}
+The benchmark is public on Hugging Face (\S\ref{sec:repro}).
 
 % =========================================================================
-\section{Experiment 1: retrieval staleness}\label{sec:retrieval}
-\status{final}
+\section{Q1: does retrieval surface the obsolete version?}\label{sec:retrieval}
+\final
 
-\paragraph{Setup.} Retrievers: BM25 ($k_1{=}1.2$, $b{=}0.75$), dense
-\texttt{bge-small-en-v1.5} with exact cosine search, and their reciprocal rank
-fusion ($k{=}60$). Top-10. Metrics: \emph{stale@1} (the first result is a
-superseded member of the query's lineage), \emph{current@1}, \emph{current@10}
-and MRR of the first current version, with 95\% bootstrap intervals
-(1{,}000 resamples). Three post-retrieval policies use the \emph{oracle} graph:
-\texttt{none}; \texttt{filter}, which drops superseded documents; and
-\texttt{promote}, which replaces each superseded hit by its current version(s)
-at the same rank. The policies bound what perfect lineage can achieve.
-
-\paragraph{Results.} Table~\ref{tab:retrieval}. On new-title queries, the
-superseded version is ranked first \res{ret.bm25.new_title.none.stale1} of the
-time with BM25, \res{ret.dense.new_title.none.stale1} with dense retrieval and
-\res{ret.hybrid.new_title.none.stale1} with the hybrid: the better retriever is
-\emph{more} stale, because it matches the topic better and the old document
-is the canonical match. On old-title queries stale@1 reaches
-\res{ret.hybrid.old_title.none.stale1}. On change-aware questions
-(Table~\ref{tab:qretrieval}, $n{=}\res{qret.n}$), the hybrid is stale at rank 1
-\res{qret.hybrid.none.stale1} \res{qret.hybrid.none.stale1.ci} of the time.
-With oracle lineage, \texttt{promote} raises hybrid current@1 to
-\res{ret.hybrid.new_title.promote.current1} (new titles) and
-\res{qret.hybrid.promote.current1} (questions).
-
-\begin{table}[t]
-\centering\small
-\input{generated/tab_retrieval.tex}
-\caption{Retrieval staleness on test-split title queries
-($n{=}\res{ret.new_title.n}$ new-title, $\res{ret.old_title.n}$ old-title).
-\texttt{filter} and \texttt{promote} use the oracle lineage graph.}
-\label{tab:retrieval}
-\end{table}
-
-\begin{table}[t]
-\centering\small
-\input{generated/tab_questions_retrieval.tex}
-\caption{Retrieval staleness on change-aware questions (all splits,
-$n{=}\res{qret.n}$).}
-\label{tab:qretrieval}
-\end{table}
-
-% =========================================================================
-\section{Experiment 2: answer staleness}\label{sec:answers}
-\status{final for $n{=}\res{ans.n}$; human judge check pending}
-
-\paragraph{Setup.} For each change-aware question, the hybrid retriever
-returns its top-10 and the answerer (\texttt{\res{ans.answer_model}}) sees the
-top-\res{ans.context_k} under three policies: \texttt{naive} (as retrieved),
-\texttt{latest\_only} (\texttt{promote} with the oracle graph, then keep current
-versions), and \texttt{show\_conflict} (the \texttt{promote} order, with superseded
-documents kept and marked as replaced). A reference-based judge
-(\texttt{\res{ans.judge_model}}) compares each answer with the reference current
-and stale answers and labels it \emph{current}, \emph{stale},
-\emph{mixed-flagged} (both, with the old one marked as outdated),
-\emph{mixed-unflagged}, \emph{abstain} or \emph{other}. A \emph{stale outcome}
-is \emph{stale} or \emph{mixed-unflagged}.
-
-In the standard context each passage shows its year and number, which lets a
-strong answerer resolve versions on its own. The \emph{blind} ablation removes
-years, masks RFC numbers and labels passages D1..Dk, as in collections without
-reliable metadata.
-
-\paragraph{Judge validity.} A second model (Claude Opus) labelled
-\res{judge.model.n} answers blind to the judge's labels: Cohen's
-$\kappa{=}\res{judge.model.kappa}$ (\res{judge.model.agree} of
-\res{judge.model.n} identical). This is model--model agreement, not human
-validation; a human spot check is pending
-(human $\kappa{=}\res{judge.human.kappa}$, $n{=}\res{judge.human.n}$).
-
-\paragraph{Results.} Table~\ref{tab:answers}. With metadata visible, the naive
-policy yields a stale outcome \res{ans.std.naive.stale_outcome} of the time;
-blind, \res{ans.blind.naive.stale_outcome}
-\res{ans.blind.naive.stale_outcome.ci}. With oracle lineage,
-\texttt{show\_conflict} gives \res{ans.blind.show_conflict.stale_outcome}
-stale outcomes and the most current answers
-(\res{ans.blind.show_conflict.current_outcome} blind). Lineage therefore
-matters most precisely where metadata is missing, which motivates inferring it.
-
-\begin{table}[t]
-\centering\small
-\input{generated/tab_answers.tex}
-\caption{Answer staleness on change-aware questions ($n{=}\res{ans.n}$),
-hybrid retrieval, top-\res{ans.context_k} context.}
-\label{tab:answers}
-\end{table}
-
-% =========================================================================
-\section{Inferring lineage: the cheap scorer}\label{sec:librarian}
-\status{final (librarian v0)}
-
-\paragraph{Leakage control.} RFC abstracts often state the lineage (``This
-document obsoletes RFC 2581''), and the lineage fields themselves are hidden
-from every method. Three settings: \texttt{declared} keeps the text as is;
-\texttt{masked} replaces every RFC number by a neutral token; \texttt{strict}
-also deletes sentences that declare a supersession. \texttt{strict} is the
-setting of interest for collections without any declaration.
-
-\paragraph{Candidates and features.} Candidate pairs are each document's 10
-nearest neighbours by abstract embedding and by title embedding, ordered by
-publication date (\res{lin.strict.ncand} pairs in \texttt{strict}; they contain
-\res{lin.strict.recall} of the true edges). Features: title Jaccard and cosine,
-abstract cosine, year gap, same year, version cues, keyword Jaccard, inverse
-neighbour rank, and in \texttt{declared} a supersession cue mentioning the
-older document. A heuristic and a logistic regression trained on dev pairs
-(threshold tuned on dev F1) score each pair; each old document keeps its best
-successor above threshold.
-
-\paragraph{Results.} Table~\ref{tab:lineage}. Edge F1 falls from
-\res{lin.declared.logreg.f1} (declared) to \res{lin.strict.logreg.f1}
-(strict). Downstream, the inferred graph with \texttt{promote} closes
-\res{lin.strict.logreg.title.gap} of the current@1 gap between no lineage and
-oracle lineage on title queries in \texttt{strict}
-(\res{lin.declared.logreg.title.gap} in \texttt{declared}). Half the gap
-remains, and the scorer's errors concentrate in a band of high but uncertain
-scores: this is where the agent is used.
-
-\begin{table}[t]
-\centering\small
-\resizebox{\linewidth}{!}{\input{generated/tab_lineage.tex}}
-\caption{Lineage inference on test-split pairs, and downstream current@1 with
-\texttt{promote} over the inferred graph (gap closed between no lineage and
-oracle in brackets).}
-\label{tab:lineage}
-\end{table}
-
-% =========================================================================
-\section{The librarian agent}\label{sec:agent}
-\status{preliminary: $n{=}20$ pairs per run}
-
-\paragraph{Design.} The agent decides whether a newer document supersedes an
-older one. It is a LangGraph state machine (Figure~\ref{fig:agent}):
-\emph{triage} accepts or rejects pairs on which the cheap scorer is confident,
-\emph{investigate} is a tool-calling loop (at most 8 steps), and \emph{decide}
-returns a structured verdict (\emph{supersedes}, \emph{amends},
-\emph{conflicts}, \emph{unrelated}) with a confidence and a rationale.
-The tools are served by an MCP server, the same one used in deployment, and
-never expose lineage fields:
-\texttt{search(query)}; \texttt{read\_doc(id)} (title, year, keywords,
-abstract); \texttt{compare(a, b)} (both documents, word overlaps, which is
-older); and, from prompt v2, \texttt{find\_later(id)}, the documents on the
-same topic published the same year or later, i.e.\ the candidate replacements.
-Models run locally through Ollama: Qwen~3.5 (9.7B) and Ministral~3 (8B), at
-temperature 0. Prompt v2 also asks the agent to compare first, then look for
-later versions, to distinguish a successor from a companion document, and gives
-a confidence rubric.
+\paragraph{Setup} Three retrievers: BM25~\cite{robertson2009bm25}, dense
+embeddings (\code{bge-small-en-v1.5}~\cite{xiao2023cpack}), and their reciprocal
+rank fusion~\cite{cormack2009rrf} (``hybrid''). Top 10. With oracle lineage we also
+test two fixes: \code{filter} drops obsolete documents; \code{promote} replaces each
+obsolete hit with its current version, at the same rank.
 
 \begin{figure}[t]
 \centering
-\begin{tikzpicture}[node distance=7mm and 9mm, every node/.style={font=\small},
-  box/.style={draw, rounded corners, minimum height=7mm, minimum width=19mm, align=center},
-  arr/.style={-{Stealth[length=2mm]}}]
-\node[box] (triage) {triage\\\scriptsize cheap score};
-\node[box, right=of triage] (inv) {investigate\\\scriptsize LLM + tools};
-\node[box, right=of inv] (decide) {decide\\\scriptsize structured verdict};
-\node[box, below=of inv, fill=gray!10] (tools) {MCP tools\\\scriptsize search, read\_doc,\\\scriptsize compare, find\_later};
-\node[right=of decide] (end) {end};
-\draw[arr] (triage) -- node[above]{\scriptsize unsure} (inv);
-\draw[arr] (inv) -- node[above]{\scriptsize done} (decide);
-\draw[arr] (decide) -- (end);
-\draw[arr] (inv.south west) ++(3mm,0) -- ([xshift=3mm]tools.north west);
-\draw[arr] ([xshift=-3mm]tools.north east) -- ([xshift=-3mm]inv.south east);
-\draw[arr] (triage.north) to[bend left=25] node[above]{\scriptsize confident} (end.north);
+\includegraphics[width=\linewidth]{generated/fig_retrieval.pdf}
+\caption{\textbf{(a)} Share of queries whose top result is obsolete, by query type
+and retriever, with 95\% intervals. \textbf{(b)} Share whose top result is current,
+as retrieved (hollow) and after \code{promote} with oracle lineage (filled).
+Test split; questions use all splits ($n{=}\res{qret.n}$). Full numbers:
+Tables~\ref{tab:retrieval}–\ref{tab:qretrieval}.}
+\label{fig:retrieval}
+\end{figure}
+
+\paragraph{Results} Every retriever often ranks the obsolete version first
+(Fig.~\ref{fig:retrieval}a): on new-title queries, \res{ret.bm25.new_title.none.stale1.pct}
+of the time with BM25, \res{ret.dense.new_title.none.stale1.pct} with dense retrieval and
+\res{ret.hybrid.new_title.none.stale1.pct} with the hybrid; on change-aware questions,
+\res{qret.hybrid.none.stale1.pct} \res{qret.hybrid.none.stale1.cipct} with the hybrid.
+The best topical matcher is the most stale, because the old document \emph{is} a
+good match for the topic. With oracle lineage, \code{promote} raises the hybrid's
+current@1 from \res{ret.hybrid.new_title.none.current1.pct} to
+\res{ret.hybrid.new_title.promote.current1.pct} on new titles
+(Fig.~\ref{fig:retrieval}b).
+
+\Takeaway{Staleness is a property of the collection, not of a weak retriever.
+Better retrieval makes it worse. Knowing the lineage removes it almost completely.}
+
+% =========================================================================
+\section{Q2: does it reach the answer?}\label{sec:answers}
+\final[final · human check of the judge pending]
+
+\paragraph{Setup} For each question, the hybrid retriever's results go to an
+answering model (\code{\res{ans.answer_model}}, top \res{ans.context_k}) under
+three policies, all using oracle lineage except the first:
+\code{naive} (context as retrieved); \code{latest\_only} (current versions only);
+\code{show\_conflict} (\code{promote} order, obsolete documents kept and marked as
+replaced). A judge model (\code{\res{ans.judge_model}}) compares each answer with
+the reference old and new answers. A \emph{stale} outcome gives the old answer
+without flagging it as outdated.
+
+In the standard context each passage shows its year and RFC number, which a
+strong model can use to pick the newer one by itself. The \emph{blind} variant
+hides years and numbers, as in collections without reliable metadata.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{generated/fig_answers.pdf}
+\caption{What the answers say, per policy ($n{=}\res{ans.n}$ questions each).
+``Current, old one flagged'' gives the new answer and mentions the old one as
+outdated. Table~\ref{tab:answers} in the appendix gives intervals.}
+\label{fig:answers}
+\end{figure}
+
+\paragraph{Results} With metadata visible, \code{naive} gives a stale answer
+\res{ans.std.naive.stale_outcome} of the time; the model mostly resolves versions
+itself. Blind, this rises to \res{ans.blind.naive.stale_outcome}
+\res{ans.blind.naive.stale_outcome.ci} (Fig.~\ref{fig:answers}).
+\code{show\_conflict} keeps it at \res{ans.blind.show_conflict.stale_outcome}
+and gives the most current answers (\res{ans.blind.show_conflict.current_outcome}
+blind), while telling the reader what changed.
+
+\paragraph{Judge reliability} A second model labelled \res{judge.model.n}
+answers without seeing the judge's labels: Cohen's
+$\kappa=\res{judge.model.kappa}$~\cite{cohen1960kappa} (\res{judge.model.agree} of
+\res{judge.model.n} identical). This is agreement between two models; a human
+check is pending ($\kappa=\res{judge.human.kappa}$, $n=\res{judge.human.n}$).
+
+\Takeaway{Where metadata is missing, about one answer in five is stale. Showing both
+versions, with the old one marked, fixes it, but it needs the lineage.}
+
+% =========================================================================
+\section{Q3a: inferring lineage cheaply}\label{sec:librarian}
+\final[final · librarian v0]
+
+\paragraph{Hiding the answer} Many abstracts say outright ``This document
+obsoletes RFC 2581'', and the index's lineage fields are hidden from every method.
+Three settings: \code{declared} keeps the text; \code{masked} replaces every RFC
+number with a neutral token; \code{strict} also removes sentences that announce a
+replacement. \code{strict} matches collections that never declare it.
+
+\paragraph{Method} Candidate pairs are each document's 10 nearest neighbours by
+abstract and by title embedding, older first (\res{lin.strict.ncand} pairs, covering
+\res{lin.strict.recall.pct} of the true links). Each pair gets cheap features (title and
+abstract similarity, year gap, version cues such as ``bis'' or ``version 2'',
+shared keywords, neighbour rank) and a score from a logistic regression trained on
+the dev split, with a threshold chosen on dev. Each old document keeps its best
+replacement above the threshold.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{generated/fig_lineage.pdf}
+\caption{current@1 after \code{promote} using inferred lineage, between no lineage
+(hollow) and oracle lineage (bar). Labels: share of the gap closed by the logistic
+regression. Edge precision, recall and F1 in Table~\ref{tab:lineage}.}
+\label{fig:lineage}
+\end{figure}
+
+\paragraph{Results} Edge F1 drops from \res{lin.declared.logreg.f1} (declared) to
+\res{lin.strict.logreg.f1} (strict), but downstream the inferred lineage still
+closes \res{lin.strict.logreg.title.gap} of the gap on title queries
+(Fig.~\ref{fig:lineage}). Its mistakes cluster in a band of high but uncertain
+scores, mostly pairs with near-identical titles that are companions rather than
+successors.
+
+\Takeaway{Cheap signals recover half of what lineage is worth. The other half sits in
+ambiguous pairs that need reading, which is the agent's job.}
+
+% =========================================================================
+\section{Q3b: a librarian agent for the uncertain cases}\label{sec:agent}
+\prelim[preliminary · 20 pairs per run]
+
+\paragraph{Design} The agent decides whether a newer document replaces an older
+one (Fig.~\ref{fig:agentdiagram}). It is a LangGraph state machine: \emph{triage}
+settles pairs the cheap scorer is sure about; \emph{investigate} lets the model call
+tools for up to 8 steps, ReAct-style~\cite{yao2023react}; \emph{decide} returns a
+structured verdict (\emph{supersedes}, \emph{amends}, \emph{conflicts},
+\emph{unrelated}) with a confidence and a one-line rationale. The tools come from
+an MCP server, the same one used in deployment, and never reveal lineage:
+\code{search}, \code{read\_doc}, \code{compare} and \code{find\_later} (documents on
+the same topic published later: the candidate replacements). Models run locally
+through Ollama at temperature 0.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[font=\sffamily\small, node distance=5mm and 8mm,
+  box/.style={draw=rule, fill=white, rounded corners=3pt, minimum height=10mm,
+    minimum width=24mm, align=center, line width=0.6pt},
+  arr/.style={-{Stealth[length=2.2mm]}, ink2, line width=0.7pt},
+  lab/.style={font=\sffamily\scriptsize, text=ink2}]
+\node[box] (pair) {document pair\\\scriptsize old, new};
+\node[box, right=of pair, draw=accent] (triage) {\textbf{triage}\\\scriptsize cheap score};
+\node[box, right=12mm of triage, draw=accent] (inv) {\textbf{investigate}\\\scriptsize LLM + tool calls};
+\node[box, right=12mm of inv, draw=accent] (decide) {\textbf{decide}\\\scriptsize structured verdict};
+\node[box, below=7mm of inv, fill=paper, minimum width=56mm] (tools)
+  {\textbf{MCP server}\\\scriptsize\code{search} · \code{read\_doc} · \code{compare} · \code{find\_later}};
+\node[right=6mm of decide, align=left, font=\sffamily\scriptsize] (out)
+  {label\\confidence\\rationale};
+\draw[arr] (pair) -- (triage);
+\draw[arr] (triage) -- node[lab, above]{unsure} (inv);
+\draw[arr] (inv) -- node[lab, above]{done} (decide);
+\draw[arr] (decide) -- (out);
+\draw[arr] ([xshift=-4mm]inv.south) -- node[lab, left]{call} ([xshift=-4mm]tools.north);
+\draw[arr] ([xshift=4mm]tools.north) -- node[lab, right]{result} ([xshift=4mm]inv.south);
+\draw[arr] (triage.north) .. controls +(0,9mm) and +(0,9mm) .. node[lab, above]{confident: accept or reject} (out.north);
 \end{tikzpicture}
-\caption{The librarian agent. Only pairs in the cheap scorer's uncertain band
-reach the LLM.}
+\caption{The librarian agent. Only pairs in the cheap scorer's uncertain band reach
+the language model, so the agent's cost scales with ambiguity, not corpus size.}
+\label{fig:agentdiagram}
+\end{figure}
+
+\paragraph{Evaluation} We take test pairs whose cheap-scorer probability falls in the
+uncertain band \res{agent.band}, \code{strict} setting, and draw a seeded sample
+with as many true replacements as non-replacements. The agent and the cheap scorer
+(with its own threshold, \res{agent.threshold}) are scored \emph{on the same pairs}.
+Two ground truths: \emph{strict} (the index records the link directly) and
+\emph{lineage} (a later version through a chain also counts: if A$\to$B$\to$C, then
+``C replaces A'' is right for a reader). Because the sample is balanced and the band
+is not (only \res{agent.prior.strict} of band pairs are true links), the precision
+expected in use is estimated from the hit rates (Table~\ref{tab:agent}).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{generated/fig_agent.pdf}
+\caption{Balanced accuracy on the same \res{agent.qwen3.5-hermes.agent-v2.n} band
+pairs, with 95\% stratified bootstrap intervals. Hollow: prompt v1; filled: prompt v2.
+Blue: Qwen 3.5 (9.7B); orange: Ministral 3 (8B); grey: the cheap scorer.}
 \label{fig:agent}
 \end{figure}
 
-\paragraph{Evaluation protocol.} The agent only sees pairs whose cheap-scorer
-probability falls in the band \res{agent.band} (\texttt{strict} setting, test
-split). From that band we draw a seeded sample with equal numbers of true edges
-and non-edges, and compare the agent with the cheap scorer's own decision
-(probability $\geq$ its dev threshold \res{agent.threshold}) \emph{on the same
-pairs}. We report true-positive and true-negative rates, balanced accuracy with
-a stratified bootstrap 95\% interval, and an estimated precision at the band's
-real positive rate (\res{agent.prior.strict} strict), since the sample is
-balanced and the band is not. Two ground truths: \emph{strict} (the index
-records the edge directly) and \emph{lineage}, which also accepts a later
-version through a chain (A$\to$B$\to$C makes ``C supersedes A'' correct for a
-reader; band positive rate \res{agent.prior.lineage}).
+\paragraph{Results so far} The cheap scorer reaches \res{agent.cheap.strict.ba}
+\res{agent.cheap.strict.ba.ci} on these pairs (Fig.~\ref{fig:agent}). The Qwen agent
+with prompt v1 reached \res{agent.qwen3.5-hermes.agent-v1.strict.ba}, but it never
+searched: it read both documents, compared them, and accepted look-alike pairs
+(true-negative rate \res{agent.qwen3.5-hermes.agent-v1.strict.tnr}). Prompt v2 adds
+\code{find\_later}, a fixed procedure (compare, then look for later versions) and
+a confidence rubric; Qwen then checks for later versions on every pair and
+reaches \res{agent.qwen3.5-hermes.agent-v2.strict.ba}
+\res{agent.qwen3.5-hermes.agent-v2.strict.ba.ci}, with true-negative rate
+\res{agent.qwen3.5-hermes.agent-v2.strict.tnr}. Ministral~3 with the same prompt
+reaches \res{agent.ministral-3.agent-v2.strict.ba}: it called \code{compare} once per
+pair and never \code{find\_later}, so it decided from titles and dates.
 
-\paragraph{Results so far.} Table~\ref{tab:agent}. On the same 20 pairs, the
-cheap scorer reaches balanced accuracy \res{agent.cheap.strict.ba}
-\res{agent.cheap.strict.ba.ci} (strict truth). The Qwen agent with prompt v1
-reaches \res{agent.qwen3.5-hermes.agent-v1.strict.ba}
-\res{agent.qwen3.5-hermes.agent-v1.strict.ba.ci}, but it never searched (every
-trace is read, read, compare) and accepted same-title pairs too readily (TNR
-\res{agent.qwen3.5-hermes.agent-v1.strict.tnr}).
-With prompt v2 and \texttt{find\_later}, it looks for later versions on every
-pair and reaches \res{agent.qwen3.5-hermes.agent-v2.strict.ba}
-\res{agent.qwen3.5-hermes.agent-v2.strict.ba.ci} (TNR
-\res{agent.qwen3.5-hermes.agent-v2.strict.tnr}). Ministral~3 with the same prompt reaches
-\res{agent.ministral-3.agent-v2.strict.ba}
-\res{agent.ministral-3.agent-v2.strict.ba.ci} (TNR
-\res{agent.ministral-3.agent-v2.strict.tnr}): it made a single \texttt{compare}
-call on every pair and never used \texttt{find\_later}, so it decides from
-titles and dates, and most of its errors are same-title pairs accepted as
-replacements. It also returned confidence 0 with two verdicts, i.e.\ it does not
-use the confidence field as intended. Following the investigation procedure is
-therefore model-dependent, which matters for a cheap local deployment. The
-intervals overlap: these runs show the direction, not a finding. Runs on
-$n\geq100$ pairs are planned.
+\Takeaway{A small local agent adds value where cheap signals are ambiguous, provided
+the model actually follows the investigation. With 20 pairs the intervals overlap:
+this is a direction, not yet a finding. Runs on $\geq$100 pairs are next.}
 
-\begin{table}[t]
+% =========================================================================
+\section{Related work}
+\todo{expand; verify every reference before submission.}
+Time-sensitive QA studies questions whose answer changes over
+time~\cite{chen2021timeqa,kasai2023realtimeqa,dhingra2022timeaware}; we study the
+document side: which version of a document is in force. Knowledge-conflict work
+asks how models resolve contradictions between memory and context or between
+passages~\cite{longpre2021entity,xie2024chameleon}; here the conflict has a ground
+truth, the lineage. LLM judges~\cite{zheng2023judge} need validation, which we
+report as agreement statistics.
+
+\section{Limitations and next steps}
+\begin{itemize}
+\item One domain (RFCs), with short abstracts. Aviation advisory circulars are next.
+\item \res{qgen.accepted} change-aware questions; in some, the reference ``new''
+  version has itself been replaced since (flagged in the dataset).
+\item The judge is checked against a second model, not yet against people.
+\item Agent results use 20 pairs per run; how much of the remaining gap the agent
+  closes downstream is not yet measured.
+\item Deployment (MCP and A2A interfaces, a container on Cloud Run) is in progress
+  and will be reported with latency and cost.
+\end{itemize}
+
+\section{Reproducibility and release}\label{sec:repro}
+Code, results and this paper: \url{https://github.com/CarlHatoum/supersede}.
+\code{make paper} regenerates every number, table and figure from \code{results/}.
+LLM calls for questions, answers and judging are cached, so \code{make reproduce}
+rebuilds them offline; agent decisions are logged per pair with tool traces.
+The benchmark is at \url{https://huggingface.co/datasets/hatoum/supersede-rfc}.
+RFC abstracts ship verbatim, as the IETF Trust Legal Provisions allow unmodified,
+attributed excerpts but not modified text; the \code{masked} and \code{strict} views
+are derived locally by a script shipped with the data.
+
+% =========================================================================
+\clearpage
+\appendix
+\section{Full tables}
+
+\begin{table}[H]
+\centering\small
+\input{generated/tab_retrieval.tex}
+\caption{Retrieval on test-split title queries ($n{=}\res{ret.new_title.n}$ new-title,
+\res{ret.old_title.n} old-title). \code{filter} and \code{promote} use oracle lineage.}
+\label{tab:retrieval}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\input{generated/tab_questions_retrieval.tex}
+\caption{Retrieval on change-aware questions ($n{=}\res{qret.n}$, all splits).}
+\label{tab:qretrieval}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\input{generated/tab_answers.tex}
+\caption{Answer outcomes ($n{=}\res{ans.n}$), hybrid retrieval,
+top-\res{ans.context_k} context. ``Current'' includes answers that flag the old version.}
+\label{tab:answers}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\resizebox{\linewidth}{!}{\input{generated/tab_lineage.tex}}
+\caption{Lineage inference: edge scores on test pairs, and downstream current@1 with
+\code{promote} (share of gap closed in brackets).}
+\label{tab:lineage}
+\end{table}
+
+\begin{table}[H]
 \centering\small
 \input{generated/tab_agent.tex}
-\caption{Agent vs.\ cheap scorer on balanced samples from the uncertain band,
-\texttt{strict} setting. Estimated precision uses the band's real positive
-rate.}
+\caption{Agent and cheap scorer on the same balanced band sample. Estimated
+precision uses the band's real share of true links (\res{agent.prior.strict}
+strict, \res{agent.prior.lineage} lineage).}
 \label{tab:agent}
 \end{table}
 
-% =========================================================================
-\section{Limitations and next steps}
-\begin{itemize}
-\item One domain so far (RFCs). RFC titles and abstracts are short; full texts
-  and other collections (e.g.\ aviation advisory circulars) are planned.
-\item Only \res{qgen.accepted} change-aware questions; some references point
-  to a new version that is itself superseded (to be fixed by generating from
-  lineage heads only).
-\item The answer judge is validated against a second model, not yet humans.
-\item Agent results are on 20 pairs per run; the uncertain band has a low
-  positive rate, so precision at deployment is the quantity to watch.
-\item Downstream impact of the agent's edges (gap closed) is not yet measured.
-\item Deployment (MCP and A2A interfaces, container on Cloud Run) is in
-  progress and will be described with latency and cost.
-\end{itemize}
+\begin{table}[H]
+\centering\small
+\input{generated/tab_qgen.tex}
+\caption{Outcome of question generation per sampled link.}
+\label{tab:qgen}
+\end{table}
 
-\section*{Reproducibility}
-Code, data build and every result file are in the repository; this PDF is
-built by \texttt{make paper}, which regenerates all numbers from
-\texttt{results/}. LLM responses for question generation, answering and
-judging are cached in SQLite, so \texttt{make reproduce} rebuilds them offline.
-Agent decisions are logged per pair, with tool traces.
-The benchmark (corpus, lineage, title queries, change-aware questions and
-lineage-inference candidate pairs, with lineage-level splits) is packaged as a
-Hugging Face dataset, \url{https://huggingface.co/datasets/hatoum/supersede-rfc}; code,
-results and this paper are at \url{https://github.com/CarlHatoum/supersede}.
-RFC abstracts are shipped verbatim, as the IETF Trust Legal Provisions allow
-unmodified, attributed excerpts but not modified text; the \texttt{masked} and
-\texttt{strict} views are derived locally by a script shipped with the data.
+\clearpage
+\section{Agent runs and traces}
+\begin{center}\small
+\resizebox{\linewidth}{!}{\input{generated/tab_agent_runs.tex}}
+\end{center}
+\input{generated/agent_traces.tex}
 
-\appendix
 \section{Provenance}
 \begin{center}\small
 \resizebox{\linewidth}{!}{\input{generated/provenance.tex}}
 \end{center}
-
-\section{Agent runs}
-\begin{center}\small
-\resizebox{\linewidth}{!}{\input{generated/tab_agent_runs.tex}}
-\end{center}
-
-\section{Example agent traces}
-\input{generated/agent_traces.tex}
 
 \begin{thebibliography}{99}\small
 \bibitem{lewis2020rag} P.~Lewis et al. Retrieval-augmented generation for knowledge-intensive NLP tasks. \emph{NeurIPS}, 2020.

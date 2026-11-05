@@ -24,6 +24,7 @@ agent = [
     "mcp>=1.10,<2",
 ]
 hub = ["huggingface_hub>=0.25", "datasets>=3"]
+paper = ["matplotlib>=3.8"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

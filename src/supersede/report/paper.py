@@ -52,6 +52,11 @@ def pct(x: float | None) -> str:
     return "--" if x is None or (isinstance(x, float) and math.isnan(x)) else f"{100 * x:.1f}\\%"
 
 
+def p0(x: float | None) -> str:
+    """A share as a whole percentage, for prose."""
+    return "--" if x is None or (isinstance(x, float) and math.isnan(x)) else f"{100 * x:.0f}\\%"
+
+
 def ci(pair, fmt=f3) -> str:
     return f"[{fmt(pair[0])}, {fmt(pair[1])}]" if pair else ""
 
@@ -130,6 +135,8 @@ def retrieval(num: Numbers, res: Path, files: dict) -> dict[str, str]:
                         continue
                     for m, short in METRICS.items():
                         num[f"ret.{ret}.{var}.{pol}.{short}"] = f3(row[m])
+                        num[f"ret.{ret}.{var}.{pol}.{short}.pct"] = p0(row[m])
+                        num[f"ret.{ret}.{var}.{pol}.{short}.cipct"] = ci(row[f"{m}_ci95"], p0)
                         num[f"ret.{ret}.{var}.{pol}.{short}.ci"] = ci(row[f"{m}_ci95"])
                     num[f"ret.{var}.n"] = row["n"]
                     rows.append(
@@ -171,6 +178,8 @@ def retrieval(num: Numbers, res: Path, files: dict) -> dict[str, str]:
                     continue
                 for m, short in METRICS.items():
                     num[f"qret.{ret}.{pol}.{short}"] = f3(row[m])
+                    num[f"qret.{ret}.{pol}.{short}.pct"] = p0(row[m])
+                    num[f"qret.{ret}.{pol}.{short}.cipct"] = ci(row[f"{m}_ci95"], p0)
                     num[f"qret.{ret}.{pol}.{short}.ci"] = ci(row[f"{m}_ci95"])
                 num["qret.n"] = row["n"]
                 rows.append(
@@ -289,6 +298,7 @@ def lineage(num: Numbers, res: Path, files: dict) -> dict[str, str]:
         st = s["setting"]
         num[f"lin.{st}.ncand"] = f"{s['n_candidate_pairs']:,}".replace(",", "{,}")
         num[f"lin.{st}.recall"] = f3(s["candidate_recall"])
+        num[f"lin.{st}.recall.pct"] = p0(s["candidate_recall"])
         num[f"lin.{st}.threshold"] = s["methods"]["logreg"]["threshold"]
         qsets = list(s["downstream"])
         if rows:

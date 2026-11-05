@@ -10,7 +10,7 @@ LLM_MODEL ?= claude-sonnet-5-5
 .PHONY: install test lint data questions answers lineage reproduce paper hf
 
 install:
-	uv venv -p 3.12 .venv && uv pip install --python $(PY) -e '.[dev,dense,agent,hub]'
+	uv venv -p 3.12 .venv && uv pip install --python $(PY) -e '.[dev,dense,agent,hub,paper]'
 
 test:
 	$(PY) -m pytest -q
@@ -46,6 +46,7 @@ lineage:
 TECTONIC ?= $(shell command -v tectonic || echo /opt/homebrew/bin/tectonic)
 paper:
 	$(PY) -m supersede.report.paper --results results --data data/rfc --out paper/generated
+	$(PY) -m supersede.report.figures --results results --out paper/generated
 	$(TECTONIC) --keep-logs -o paper paper/main.tex
 
 # Builds the Hugging Face dataset folder in dist/hf/ (no upload).
