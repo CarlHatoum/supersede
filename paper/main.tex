@@ -327,10 +327,17 @@ trace is read, read, compare) and accepted same-title pairs too readily (TNR
 With prompt v2 and \texttt{find\_later}, it looks for later versions on every
 pair and reaches \res{agent.qwen3.5-hermes.agent-v2.strict.ba}
 \res{agent.qwen3.5-hermes.agent-v2.strict.ba.ci} (TNR
-\res{agent.qwen3.5-hermes.agent-v2.strict.tnr}). Ministral~3 with prompt v2:
+\res{agent.qwen3.5-hermes.agent-v2.strict.tnr}). Ministral~3 with the same prompt reaches
 \res{agent.ministral-3.agent-v2.strict.ba}
-\res{agent.ministral-3.agent-v2.strict.ba.ci}. The intervals overlap: these runs
-show the direction, not a finding. Runs on $n\geq100$ pairs are planned.
+\res{agent.ministral-3.agent-v2.strict.ba.ci} (TNR
+\res{agent.ministral-3.agent-v2.strict.tnr}): it made a single \texttt{compare}
+call on every pair and never used \texttt{find\_later}, so it decides from
+titles and dates, and most of its errors are same-title pairs accepted as
+replacements. It also returned confidence 0 with two verdicts, i.e.\ it does not
+use the confidence field as intended. Following the investigation procedure is
+therefore model-dependent, which matters for a cheap local deployment. The
+intervals overlap: these runs show the direction, not a finding. Runs on
+$n\geq100$ pairs are planned.
 
 \begin{table}[t]
 \centering\small
