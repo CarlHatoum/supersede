@@ -256,7 +256,8 @@ def fig_lineage(res: Path, out: Path) -> bool:
         ax.set_yticks(range(len(r)), [s["setting"] for s in r])
         ax.set_ylim(len(r) - 0.5, -0.75)
         _pct_axis(ax)
-        ax.set_xticks([0, 0.25, 0.5, 0.75, 1.0])
+        ax.set_xlim(0.15, 1.02)
+        ax.set_xticks([0.25, 0.5, 0.75, 1.0])
         ax.set_title(f"{q}: current@1 with promote")
     fig.legend(
         handles=[
