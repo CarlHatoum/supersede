@@ -290,8 +290,10 @@ def fig_lineage(res: Path, out: Path) -> bool:
             Line2D([], [], ls="", marker="|", color=INK, mew=1.6, label="oracle lineage"),
         ],
         loc="lower center",
-        ncol=4,
-        bbox_to_anchor=(0.5, -0.16),
+        ncol=5,
+        columnspacing=1.2,
+        handletextpad=0.3,
+        bbox_to_anchor=(0.5, -0.26),
     )
     fig.savefig(out / "fig_lineage.pdf")
     plt.close(fig)

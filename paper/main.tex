@@ -320,21 +320,29 @@ abstract and by title embedding, older first (\res{lin.strict.ncand} pairs, cove
 abstract similarity, year gap, version cues such as ``bis'' or ``version 2'',
 shared keywords, neighbour rank) and a score from a logistic regression trained on
 the dev split, with a threshold chosen on dev. Each old document keeps its best
-replacement above the threshold.
+replacement above the threshold. As a learning-free baseline in the style of
+Modani et al.~\cite{modani2021versions}, \emph{version chains} link candidate pairs
+whose title or abstract similarity exceeds a threshold (tuned on dev), treat each
+connected group as a version family, and chain its members in publication order.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{generated/fig_lineage.pdf}
 \caption{current@1 after \code{promote} using inferred lineage, between no lineage
-(hollow) and oracle lineage (bar). Labels: share of the gap closed by the logistic
+(hollow) and oracle lineage (bar); squares: heuristic, triangles: version chains,
+dots: logistic regression. Labels: share of the gap closed by the logistic
 regression. Edge precision, recall and F1 in Table~\ref{tab:lineage}.}
 \label{fig:lineage}
 \end{figure}
 
-\paragraph{Results} Edge F1 drops from \res{lin.declared.logreg.f1} (declared) to
-\res{lin.strict.logreg.f1} (strict), but downstream the inferred lineage still
-closes \res{lin.strict.logreg.title.gap} of the gap on title queries
-(Fig.~\ref{fig:lineage}). Its mistakes cluster in a band of high but uncertain
+\paragraph{Results} The logistic regression's edge F1 drops from
+\res{lin.declared.logreg.f1} (declared) to \res{lin.strict.logreg.f1} (strict),
+while version chains hold at \res{lin.strict.version_chains.f1}: once explicit cues
+are gone, the learned scorer is no better than clustering similar documents.
+Downstream the two are close: \res{lin.strict.logreg.title.gap} and
+\res{lin.strict.version_chains.title.gap} of the gap closed on title queries,
+\res{lin.strict.logreg.questions.gap} and \res{lin.strict.version_chains.questions.gap}
+on questions (Fig.~\ref{fig:lineage}). Its mistakes cluster in a band of high but uncertain
 scores, mostly pairs with near-identical titles that are companions rather than
 successors.
 
