@@ -62,7 +62,7 @@ Then:
 5. Librarian next: MCP server, then the LangGraph agent (Ollama first, Mistral once the key is in), evaluated against the logreg baseline and the oracle.
 
 ## Clearance
-- **employer approval received (2026-11-03).** Thesis supervisor sign-off: not yet confirmed. Ask before pushing.
+- **Publication approved (employer 2026-11-03, thesis supervisor 2026-11-05).** Code is public at https://github.com/CarlHatoum/supersede; never commit employer or client names or data.
 
 ## Known constraints
 - Claude Code CLI 2.1.68 can't use Opus 5.5 (needs 2.1.280 or newer, via `claude update`). Haiku and Sonnet 5.5 work.
@@ -77,7 +77,7 @@ Then:
 
 ## Hugging Face dataset
 
-- `hatoum/supersede-rfc`, **private** (uploaded 2026-11-05). Make it public on the Hub (Settings → visibility) once the thesis supervisor agrees.
-- Rebuild: `make hf` (folder in `dist/hf/supersede-bench`); upload: `python -m supersede.bench.export_hf --push hatoum/supersede-rfc --private`.
+- https://huggingface.co/datasets/hatoum/supersede-rfc, **public** since 2026-11-05.
+- Rebuild: `make hf` (folder in `dist/hf/supersede-bench`); upload: `python -m supersede.bench.export_hf --push hatoum/supersede-rfc` (add `--private` only for a new repo).
 - Licence: RFC abstracts ship verbatim (IETF TLP 5.0 §3.c allows unmodified, attributed excerpts; no right to modify), annotations CC BY 4.0. Masked/strict views are computed by the bundled `masking.py`, never uploaded.
-- Before going public: add the code link and citation to the card.
+- Still to add to the card: a citation (once the paper is on arXiv).

@@ -284,7 +284,8 @@ through a chain. Candidate recall is about 0.89 of true edges.
 
 See the paper and code: lexical, dense and hybrid retrievers rank the superseded version
 first for a large share of queries, and a lineage-aware reranking with oracle lineage
-removes it. Code: *link to be added*.
+removes it.
+Code, experiments and paper: https://github.com/CarlHatoum/supersede
 
 ## Licence
 
@@ -292,7 +293,15 @@ removes it. Code: *link to be added*.
 
 ## Citation
 
-*To be added.*
+```bibtex
+@misc{{hatoum2026supersede,
+  title  = {{Supersede: When Retrieval-Augmented Generation Cites the Obsolete Version}},
+  author = {{Hatoum, Carl}},
+  year   = {{2026}},
+  howpublished = {{\\url{{https://github.com/CarlHatoum/supersede}}}},
+  note   = {{Dataset: https://huggingface.co/datasets/hatoum/supersede-rfc}}
+}}
+```
 """
 
 

@@ -8,7 +8,9 @@ Supersede is an open benchmark and toolkit for measuring and fixing this:
 2. **Fixes**, at two points: an ingestion-time *librarian* that infers lineage and quarantines suspect documents, and retrieval/answer-time policies that surface the current version and cite the old one.
 3. **Production path:** an incremental ingestion service, an MCP server, and published latency and cost numbers *(planned)*.
 
-> Status: **v0.2**. RFC slice, with BM25, dense (`bge-small-en-v1.5`) and hybrid (RRF) retrievers, and lineage-aware reranking with known (oracle) lineage. No LLM is involved yet, so every number below is deterministic and free to reproduce.
+**Links:** dataset on Hugging Face: [`hatoum/supersede-rfc`](https://huggingface.co/datasets/hatoum/supersede-rfc) · living paper: [`paper/main.pdf`](paper/main.pdf), rebuilt from `results/` by `make paper` · status: [`docs/STATUS.md`](docs/STATUS.md)
+
+> Status: the RFC benchmark, retrieval and answer staleness experiments, a feature-based lineage scorer (librarian v0) and a LangGraph librarian agent with MCP tools on local models are done. The paper tracks every result and marks what is preliminary. The sections below cover the first results.
 
 ## First result: every retriever prefers superseded documents, and hybrid is the worst
 
