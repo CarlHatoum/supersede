@@ -107,3 +107,11 @@ The execution plan (workstreams A–F, dated to the 7 Dec talk) lives in the pri
   the 20-pair runs moved to Appendix B as prompt-development history.
 - Night 1 lost ~14 h to laptop sleep; `scripts/agent_queue.sh` now runs under `caffeinate`.
   Night 2 (Ministral full + temperature-0.3 repeats) started 14:22.
+
+### 2026-11-06: closed-book baseline and serving
+- Closed-book (Sonnet, no documents; Haiku judge; 138 calls, ~$2.2): current 80% [70, 88],
+  stale 14%. Blind naive RAG turns 11/55 known-correct answers stale (20%; 11% with
+  metadata); latest_only and show_conflict turn none. Paper Q2 updated.
+- `serve/app.py`: /search, /lineage, /assess (cascade), MCP at /mcp, A2A at /a2a.
+  18 s startup, ~110 ms warm search. Dockerfiles in deploy/ (not yet built).
+  Needs from user for Cloud Run: GCP project, billing, L4 quota.

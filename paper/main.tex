@@ -297,14 +297,28 @@ itself. Blind, this rises to \res{ans.blind.naive.stale_outcome}
 and gives the most current answers (\res{ans.blind.show_conflict.current_outcome}
 blind), while telling the reader what changed.
 
+\paragraph{What the model knows without documents} Asked the same questions with no documents,
+the answering model gives the current answer \res{cb.current} of the time
+\res{cb.current.ci} and the old one \res{cb.stale}: it has read most of these RFCs.
+So retrieval does not supply knowledge the model lacks; it \emph{overrides}
+knowledge the model has. Of the \res{cb.blind.naive.override.n} questions it gets
+right closed-book, blind \code{naive} RAG turns \res{cb.blind.naive.override.k}
+(\res{cb.blind.naive.override}) into stale answers
+(\res{cb.standard.naive.override} with metadata visible); \code{latest\_only} and
+\code{show\_conflict} turn none. Where it does not know (\res{cb.blind.naive.rescue.n}
+questions), current documents rescue it, \res{cb.blind.show_conflict.rescue} of
+the time with \code{show\_conflict} blind. This is a lower bound for less familiar
+collections, such as internal procedures, which no model has read.
+
 \paragraph{Judge reliability} A second model labelled \res{judge.model.n}
 answers without seeing the judge's labels: Cohen's
 $\kappa=\res{judge.model.kappa}$~\cite{cohen1960kappa} (\res{judge.model.agree} of
 \res{judge.model.n} identical). This is agreement between two models; a human
 check is pending ($\kappa=\res{judge.human.kappa}$, $n=\res{judge.human.n}$).
 
-\Takeaway{Where metadata is missing, about one answer in five is stale. Showing both
-versions, with the old one marked, fixes it, but it needs the lineage.}
+\Takeaway{Where metadata is missing, about one answer in five is stale, often
+where the model knew better without retrieval. Showing both versions, with the old
+one marked, fixes it, but it needs the lineage.}
 
 % =========================================================================
 \section{Q3a: inferring lineage cheaply}\label{sec:librarian}
@@ -557,8 +571,9 @@ reasoning and tool calls~\cite{yao2023react}.
 \section{Limitations and next steps}
 \begin{itemize}
 \item \textbf{One domain.} RFCs, with short abstracts. Aviation advisory
-  circulars are next. Models have likely seen many RFCs in pre-training; a
-  closed-book baseline (in progress) separates parametric knowledge from context.
+  circulars are next. The answering model knows the current answer to
+  \res{cb.current} of the questions without documents (§\ref{sec:answers});
+  collections no model has read will test retrieval harder.
 \item \textbf{Few questions, model-checked.} \res{qgen.accepted} change-aware
   questions, validated against a second model rather than people (a human check
   is pending; HoH and Stale-Document Poisoning report human checks). A larger,

@@ -336,6 +336,23 @@ def noise(num: Numbers, res: Path, files: dict) -> None:
         num[f"{key}.stale1"] = p0(s["stale@1"])
 
 
+def closed_book(num: Numbers, res: Path, files: dict) -> None:
+    r = load(res / "rfc_closed_book.json")
+    if not r:
+        return
+    files["Closed-book baseline"] = "rfc_closed_book.json"
+    num["cb.n"] = sum(r["labels"].values())
+    for k in ("current", "stale", "abstain"):
+        num[f"cb.{k}"] = p0(r[k]["rate"])
+        num[f"cb.{k}.ci"] = ci([100 * x for x in r[k]["ci95"]], lambda x: f"{x:.0f}\\%")
+    for run, per in r["rag"].items():
+        for policy, d in per.items():
+            for m in ("override", "rescue"):
+                num[f"cb.{run}.{policy}.{m}"] = p0(d[m]["rate"])
+                num[f"cb.{run}.{policy}.{m}.n"] = d[m]["n"]
+                num[f"cb.{run}.{policy}.{m}.k"] = round(d[m]["rate"] * d[m]["n"])
+
+
 def model_alias(spec: str) -> str:
     return spec.split(":", 1)[-1].split("/")[-1].split(":")[0]
 
@@ -631,6 +648,7 @@ def build(res: Path, data: Path, out: Path) -> dict[str, str]:
     judge(num, res, files)
     tables |= lineage(num, res, files)
     noise(num, res, files)
+    closed_book(num, res, files)
     tables |= agent(num, res, files)
     tables |= agent_compare(num, res, files)
     tables["agent_traces"] = agent_traces(res)
