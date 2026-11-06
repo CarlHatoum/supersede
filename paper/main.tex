@@ -475,7 +475,8 @@ of which are in this sample (Appendix~\ref{sec:agentruns}).
 \includegraphics[width=\linewidth]{generated/fig_agent.pdf}
 \caption{Balanced accuracy on the same \res{ag.n} band pairs, with 95\% stratified
 bootstrap intervals. Grey: the cheap scorer; colours: the same Qwen~3.5 model
-with no tools (aqua), three tools (orange) and all four tools (blue).}
+with no tools (aqua), three tools (orange) and all four tools (blue); hollow:
+Ministral~3 with all tools.}
 \label{fig:agent}
 \end{figure}
 
@@ -507,6 +508,14 @@ Table~\ref{tab:agentcost}). The two make the same call on most pairs. The agent
 does follow the procedure (it calls \code{compare} and \code{find\_later} on every
 pair), but what it finds rarely changes its mind.
 
+A second model, Ministral~3 (8B) with the same prompt and all tools, lands in the
+same place: \res{ag.ministral-3.full.strict.ba} \res{ag.ministral-3.full.strict.ba.ci}
+(McNemar against the scorer
+$p=\res{ag.pair.ministral-3.full.cheap.strict.p}$), at
+\res{ag.ministral-3.full.seconds}~s per pair. It calls \code{compare} on every pair
+and never \code{find\_later}, so it decides from the two documents alone, like the
+no-tool variant.
+
 All model-based methods say ``replaces'' too readily: the full agent does so on
 \res{ag.qwen3.5-hermes.full.yes} of a balanced sample, with true-positive rate
 \res{ag.qwen3.5-hermes.full.strict.tpr} and true-negative rate
@@ -519,8 +528,8 @@ links downstream is what the cascade experiment measures (pending).
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.66\linewidth]{generated/fig_agent_cost.pdf}
-\caption{Accuracy against cost per pair on a laptop. Bars: 95\% bootstrap
-intervals. The dashed line is the cheap scorer.}
+\caption{Accuracy against cost per pair on a laptop (Apple M4). Bars: 95\%
+bootstrap intervals; hollow: Ministral~3. The dashed line is the cheap scorer.}
 \label{fig:agentcost}
 \end{figure}
 
@@ -584,7 +593,8 @@ reasoning and tool calls~\cite{yao2023react}.
   the intervals are about $\pm$0.08 wide, so differences under 0.1 are not
   detectable. Repeated runs, a second model, the downstream effect and the
   year-noise condition are in progress.
-\item \textbf{Deployment} (MCP and A2A interfaces, Cloud Run) is in progress and
+\item \textbf{Deployment.} The serving code (HTTP search with inferred lineage, the
+  cascade, MCP and A2A interfaces) is in the repository; the cloud deployment is in progress and
   will be reported with latency and cost.
 \end{itemize}
 

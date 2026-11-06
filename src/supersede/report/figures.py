@@ -400,8 +400,14 @@ def fig_agent_cost(res: Path, out: Path) -> bool:
         ax.scatter(
             [x], [v], s=40, zorder=3, color=colour if filled else "white", edgecolor=colour, lw=1.4
         )
-        if m["variant"] == "no_find_later":  # above its interval, clear of the neighbours
+        # Fixed spots keep neighbouring labels apart: above or below the interval,
+        # or beside the marker.
+        if m["alias"] != MAIN_MODEL:
+            xy, off, ha, va = (x, lo), (0, -4), "center", "top"
+        elif m["variant"] == "no_find_later":
             xy, off, ha, va = (x, hi), (0, 4), "center", "bottom"
+        elif m["variant"] == "llm_only":
+            xy, off, ha, va = (x, v), (-7, 0), "right", "center"
         else:
             xy, off, ha, va = (x, v), (7, 0), "left", "center"
         ax.annotate(
@@ -418,7 +424,7 @@ def fig_agent_cost(res: Path, out: Path) -> bool:
     ax.set_xticks([15, 30, 60, 120, 240, 480], ["15", "30", "60", "120", "240", "480"])
     ax.xaxis.set_minor_locator(matplotlib.ticker.NullLocator())
     ax.set_ylim(0.55, 0.95)
-    ax.set_xlabel("seconds per pair (local Qwen 3.5, Apple M4, log scale)")
+    ax.set_xlabel("seconds per pair (local model, Apple M4, log scale)")
     ax.set_ylabel("balanced accuracy (strict)")
     fig.savefig(out / "fig_agent_cost.pdf")
     plt.close(fig)
