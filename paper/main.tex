@@ -108,11 +108,13 @@ and every result are public, and this draft is rebuilt from them.
   to perfect lineage, but simple newest-first ranking does about as well, and both
   degrade together when years are missing or wrong
   (Figs.~\ref{fig:lineage},~\ref{fig:noise}).
-\item \textbf{An agent handles the ambiguous pairs} \emph{(preliminary,
-  $n{=}20$; $n{=}100$ with ablations in progress).} On pairs the scorer finds
-  ambiguous, a local 9.7B-parameter agent reaches
-  \res{agent.qwen3.5-hermes.agent-v2.strict.ba} balanced accuracy against
-  \res{agent.cheap.strict.ba} for the scorer (Fig.~\ref{fig:agent}).
+\item \textbf{On ambiguous pairs, reading helps a little; tools do not yet.} On
+  \res{ag.n} pairs the scorer finds ambiguous, a local 9.7B model reaches
+  \res{ag.qwen3.5-hermes.full.strict.ba} balanced accuracy with tools and
+  \res{ag.qwen3.5-hermes.llm_only.strict.ba} from one call without them, against
+  \res{ag.cheap.strict.ba} for the scorer; no difference is significant, and the
+  gain grows when later versions in the same chain count as right
+  (Figs.~\ref{fig:agent},~\ref{fig:agentcost}).
 \end{enumerate}
 \end{tcolorbox}
 
@@ -391,7 +393,7 @@ are wrong is the next test.}
 
 % =========================================================================
 \section{Q3b: a librarian agent for the uncertain cases}\label{sec:agent}
-\prelim[preliminary · 20 pairs per run]
+\prelim[100 pairs · repeats, second model and downstream effect pending]
 
 \paragraph{Design} The agent decides whether a newer document replaces an older
 one (Fig.~\ref{fig:agentdiagram}). It is a LangGraph state machine: \emph{triage}
@@ -433,40 +435,87 @@ the language model, so the agent's cost scales with ambiguity, not corpus size.}
 \end{figure}
 
 \paragraph{Evaluation} We take test pairs whose cheap-scorer probability falls in the
-uncertain band \res{agent.band}, \code{strict} setting, and draw a seeded sample
-with as many true replacements as non-replacements. The agent and the cheap scorer
-(with its own threshold, \res{agent.threshold}) are scored \emph{on the same pairs}.
-Two ground truths: \emph{strict} (the index records the link directly) and
+uncertain band \res{ag.band} (\code{strict} setting, \res{ag.bandsize} pairs) and
+draw a seeded sample of \res{ag.n}: \res{ag.half} true replacements and \res{ag.half}
+non-replacements. The sample is nested (its first 20 and 50 pairs are the samples
+used for repeated runs). Each method is scored \emph{on the same pairs}, against
+two ground truths: \emph{strict} (the index records the link directly) and
 \emph{lineage} (a later version through a chain also counts: if A$\to$B$\to$C, then
-``C replaces A'' is right for a reader). Because the sample is balanced and the band
-is not (only \res{agent.prior.strict} of band pairs are true links), the precision
-expected in use is estimated from the hit rates (Table~\ref{tab:agent}).
+``C replaces A'' is right for a reader). The sample is balanced but the band is
+not (\res{ag.prior.strict.pct} of band pairs are true links), so we report the
+precision expected in use, estimated from the hit rates (Table~\ref{tab:agent}).
+Paired differences are tested with an exact McNemar test and a paired bootstrap of
+the balanced-accuracy difference.
+
+\paragraph{What we compare} Three ways of using the same model
+(\code{qwen3.5}, 9.7B, temperature 0) and the same prompt (v2), to tell what the
+tools add: \emph{LLM only} reads both documents (the same text \code{read\_doc}
+returns) and decides in one call; \emph{agent without \code{find\_later}} has
+\code{search}, \code{read\_doc} and \code{compare}; \emph{agent, all tools} adds
+\code{find\_later}. The cheap scorer uses its own tuned threshold
+(\res{ag.threshold}). Prompt v2 was written after looking at 20 earlier pairs, ten
+of which are in this sample (Appendix~\ref{sec:agentruns}).
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{generated/fig_agent.pdf}
-\caption{Balanced accuracy on the same \res{agent.qwen3.5-hermes.agent-v2.n} band
-pairs, with 95\% stratified bootstrap intervals. Hollow: prompt v1; filled: prompt v2.
-Blue: Qwen 3.5 (9.7B); orange: Ministral 3 (8B); grey: the cheap scorer.}
+\caption{Balanced accuracy on the same \res{ag.n} band pairs, with 95\% stratified
+bootstrap intervals. Grey: the cheap scorer; colours: the same Qwen~3.5 model
+with no tools (aqua), three tools (orange) and all four tools (blue).}
 \label{fig:agent}
 \end{figure}
 
-\paragraph{Results so far} The cheap scorer reaches \res{agent.cheap.strict.ba}
-\res{agent.cheap.strict.ba.ci} on these pairs (Fig.~\ref{fig:agent}). The Qwen agent
-with prompt v1 reached \res{agent.qwen3.5-hermes.agent-v1.strict.ba}, but it never
-searched: it read both documents, compared them, and accepted look-alike pairs
-(true-negative rate \res{agent.qwen3.5-hermes.agent-v1.strict.tnr}). Prompt v2 adds
-\code{find\_later}, a fixed procedure (compare, then look for later versions) and
-a confidence rubric; Qwen then checks for later versions on every pair and
-reaches \res{agent.qwen3.5-hermes.agent-v2.strict.ba}
-\res{agent.qwen3.5-hermes.agent-v2.strict.ba.ci}, with true-negative rate
-\res{agent.qwen3.5-hermes.agent-v2.strict.tnr}. Ministral~3 with the same prompt
-reaches \res{agent.ministral-3.agent-v2.strict.ba}: it called \code{compare} once per
-pair and never \code{find\_later}, so it decided from titles and dates.
+\paragraph{Results} All three model-based methods do somewhat better than the
+cheap scorer, and none of the differences is significant (Fig.~\ref{fig:agent}).
+Under the strict ground truth, the full agent reaches
+\res{ag.qwen3.5-hermes.full.strict.ba} \res{ag.qwen3.5-hermes.full.strict.ba.ci}
+against \res{ag.cheap.strict.ba} \res{ag.cheap.strict.ba.ci} (difference
+\res{ag.pair.qwen3.5-hermes.full.cheap.strict.diff}
+\res{ag.pair.qwen3.5-hermes.full.cheap.strict.diff.ci}, McNemar
+$p=\res{ag.pair.qwen3.5-hermes.full.cheap.strict.p}$). Under the lineage ground
+truth the gap widens: the agent without \code{find\_later} reaches
+\res{ag.qwen3.5-hermes.no_find_later.lineage.ba} against
+\res{ag.cheap.lineage.ba} (McNemar
+$p=\res{ag.pair.qwen3.5-hermes.no_find_later.cheap.lineage.p}$). Many of the
+model's ``false'' replacements are later issues of the same series, such as two
+editions of \emph{Internet Official Protocol Standards} several versions apart:
+wrong for the index, right for a reader.
 
-\Takeaway{A small local agent adds value where cheap signals are ambiguous, provided
-the model actually follows the investigation. With 20 pairs the intervals overlap:
-this is a direction, not yet a finding. Runs on $\geq$100 pairs are next.}
+The tools do not help. A single call without tools
+(\res{ag.qwen3.5-hermes.llm_only.strict.ba}) is as accurate as the full agent
+(difference \res{ag.pair.qwen3.5-hermes.full.qwen3.5-hermes.llm_only.strict.diff},
+$p=\res{ag.pair.qwen3.5-hermes.full.qwen3.5-hermes.llm_only.strict.p}$) at a quarter
+of the cost: \res{ag.qwen3.5-hermes.llm_only.seconds}~s per pair against
+\res{ag.qwen3.5-hermes.full.seconds}~s, and
+\res{ag.qwen3.5-hermes.llm_only.intok} input tokens against
+\res{ag.qwen3.5-hermes.full.intok} (Fig.~\ref{fig:agentcost},
+Table~\ref{tab:agentcost}). The two make the same call on most pairs. The agent
+does follow the procedure (it calls \code{compare} and \code{find\_later} on every
+pair), but what it finds rarely changes its mind.
+
+All model-based methods say ``replaces'' too readily: the full agent does so on
+\res{ag.qwen3.5-hermes.full.yes} of a balanced sample, with true-positive rate
+\res{ag.qwen3.5-hermes.full.strict.tpr} and true-negative rate
+\res{ag.qwen3.5-hermes.full.strict.tnr}. In the real band, where only
+\res{ag.prior.strict.pct} of pairs are true links, this gives an expected precision
+of \res{ag.qwen3.5-hermes.full.strict.prec}, below the scorer's
+\res{ag.cheap.strict.prec}. Whether the extra recall outweighs the extra false
+links downstream is what the cascade experiment measures (pending).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.66\linewidth]{generated/fig_agent_cost.pdf}
+\caption{Accuracy against cost per pair on a laptop. Bars: 95\% bootstrap
+intervals. The dashed line is the cheap scorer.}
+\label{fig:agentcost}
+\end{figure}
+
+\Takeaway{On pairs where cheap signals are ambiguous, reading the two documents
+helps a little, mostly by recognising later versions in a chain; the investigation
+tools add cost but no accuracy. A tool-using agent is not yet justified over a
+single model call here. Next: repeated runs, a second model, the effect on
+retrieval through the cascade, and whether reading holds up when years are wrong,
+where the cheap scorer and recency both fail (§\ref{sec:noise}).}
 
 % =========================================================================
 \section{Related work}\label{sec:related}
@@ -516,11 +565,10 @@ reasoning and tool calls~\cite{yao2023react}.
   head-only generation is planned.
 \item \textbf{One answering model} so far; open-weight answering models are in
   progress.
-\item \textbf{Agent evidence is preliminary.} The 20-pair runs are being replaced
-  by 100 nested pairs with ablations (no tools, no \code{find\_later}), paired
-  tests, repeated runs, cost, and the downstream gap closed by the agent.
-\item \textbf{Recency baselines} (newest-first, time decay) and their behaviour
-  under missing or wrong years are being added.
+\item \textbf{Agent evidence is limited.} One model, one prompt, \res{ag.n} pairs:
+  the intervals are about $\pm$0.08 wide, so differences under 0.1 are not
+  detectable. Repeated runs, a second model, the downstream effect and the
+  year-noise condition are in progress.
 \item \textbf{Deployment} (MCP and A2A interfaces, Cloud Run) is in progress and
   will be reported with latency and cost.
 \end{itemize}
@@ -574,10 +622,18 @@ top-\res{ans.context_k} context. ``Current'' includes answers that flag the old 
 \begin{table}[H]
 \centering\small
 \input{generated/tab_agent.tex}
-\caption{Agent and cheap scorer on the same balanced band sample. Estimated
-precision uses the band's real share of true links (\res{agent.prior.strict}
-strict, \res{agent.prior.lineage} lineage).}
+\caption{Agent variants and cheap scorer on the same \res{ag.n} band pairs.
+Estimated precision uses the band's real share of true links
+(\res{ag.prior.strict} strict, \res{ag.prior.lineage} lineage).}
 \label{tab:agent}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\resizebox{\linewidth}{!}{\input{generated/tab_agent_cost.tex}}
+\caption{Cost per pair (means; local Qwen~3.5 on an Apple M4) and the share of
+pairs labelled ``replaces''.}
+\label{tab:agentcost}
 \end{table}
 
 \begin{table}[H]
@@ -588,8 +644,17 @@ strict, \res{agent.prior.lineage} lineage).}
 \end{table}
 
 \clearpage
-\section{Agent runs and traces}
+\section{Agent prompt development and traces}\label{sec:agentruns}
+Prompts were developed on an earlier, non-nested 20-pair sample. Prompt v1 never
+searched: it read both documents, compared them and accepted look-alike pairs.
+Prompt v2 added \code{find\_later}, a fixed procedure (compare, then look for later
+versions) and a confidence rubric. Ministral~3 (8B) with prompt v2 called
+\code{compare} once per pair and never \code{find\_later}. These runs are kept for
+the record; the results in §\ref{sec:agent} use the 100-pair sample.
 \begin{center}\small
+\input{generated/tab_agent_history.tex}
+
+\medskip
 \resizebox{\linewidth}{!}{\input{generated/tab_agent_runs.tex}}
 \end{center}
 \input{generated/agent_traces.tex}

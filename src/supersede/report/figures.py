@@ -306,40 +306,47 @@ def _model_style(model: str, prompt: str):
     return colour, filled
 
 
+VARIANT_STYLE = {  # colour follows the variant; hollow markers for the comparison model
+    "llm_only": (AQUA, "LLM only"),
+    "no_find_later": (ORANGE, "agent, no find_later"),
+    "full": (BLUE, "agent, all tools"),
+}
+MAIN_MODEL = "qwen3.5-hermes"
+
+
+def _compare(res: Path, n: int = 100):
+    return load(res / "agent" / f"compare_strict_n{n}.json")
+
+
+def _method_label(m) -> str:
+    name = VARIANT_STYLE.get(m["variant"], (GREY, m["variant"]))[1]
+    return name if m["alias"] == MAIN_MODEL else f"{name} ({m['alias']})"
+
+
+def _method_style(m):
+    colour = VARIANT_STYLE.get(m["variant"], (GREY, ""))[0]
+    return colour, m["alias"] == MAIN_MODEL
+
+
 def fig_agent(res: Path, out: Path) -> bool:
-    runs = []
-    for p in sorted((res / "agent" / "history").glob("*.json")):
-        r = json.loads(p.read_text())
-        if r.get("experiment") == "agent_lineage" and r["agent"].get("balanced_accuracy_ci95"):
-            runs.append(r)
-    if not runs:
+    r = _compare(res)
+    if not r:
         return False
+    order = {"llm_only": 0, "no_find_later": 1, "full": 2}
+    methods = sorted(
+        r["methods"], key=lambda m: (m["alias"] != MAIN_MODEL, order.get(m["variant"], 9))
+    )
     fig, axes = plt.subplots(
         1,
         2,
-        figsize=(WIDTH, 0.42 + 0.3 * (len(runs) + 1)),
+        figsize=(WIDTH, 0.5 + 0.3 * (len(methods) + 1)),
         sharey=True,
         gridspec_kw={"wspace": 0.08},
     )
     for ax, truth in zip(axes, ("strict", "lineage"), strict=True):
-        rows = [
-            (
-                "cheap scorer (v0)",
-                runs[0] if truth == "strict" else runs[0]["lineage_truth"],
-                "cheap_scorer",
-                GREY,
-                True,
-            )
-        ]
-        for r in runs:
-            block = r if truth == "strict" else r["lineage_truth"]
-            model = r["model"].split(":", 1)[-1].split("/")[-1].split(":")[0]
-            colour, filled = _model_style(model, r["prompt_version"])
-            rows.append(
-                (f"agent: {model}, {r['prompt_version'][-2:]}", block, "agent", colour, filled)
-            )
-        for i, (_name, block, who, colour, filled) in enumerate(rows):
-            m = block[who]
+        rows = [("cheap scorer (v0)", r["cheap_scorer"][truth], GREY, True)]
+        rows += [(_method_label(m), m[truth], *_method_style(m)) for m in methods]
+        for i, (_name, m, colour, filled) in enumerate(rows):
             lo, hi = m["balanced_accuracy_ci95"]
             v = m["balanced_accuracy"]
             ax.plot(
@@ -357,13 +364,63 @@ def fig_agent(res: Path, out: Path) -> bool:
             ax.text(hi + 0.012, i, f"{v:.2f}", va="center", fontsize=7)
         ax.axvline(0.5, color=GREY, lw=0.7, ls=(0, (2, 2)), zorder=1)
         ax.text(0.505, len(rows) - 0.45, "chance", fontsize=6.5, color=GREY)
-        ax.set_yticks(range(len(rows)), [r[0] for r in rows])
+        ax.set_yticks(range(len(rows)), [x[0] for x in rows])
         ax.set_ylim(len(rows) - 0.35, -0.6)
-        ax.set_xlim(0.35, 1.08)
+        ax.set_xlim(0.45, 1.0)
         ax.grid(axis="y", visible=False)
         ax.set_xlabel("balanced accuracy, 95% bootstrap CI")
         ax.set_title(f"{truth} ground truth")
     fig.savefig(out / "fig_agent.pdf")
+    plt.close(fig)
+    return True
+
+
+def fig_agent_cost(res: Path, out: Path) -> bool:
+    r = _compare(res)
+    if not r:
+        return False
+    fig, ax = plt.subplots(figsize=(WIDTH * 0.62, 2.1))
+    cheap = r["cheap_scorer"]["strict"]["balanced_accuracy"]
+    ax.axhline(cheap, color=GREY, lw=0.9, ls=(0, (3, 2)), zorder=1)
+    ax.text(
+        13,
+        0.565,
+        f"dashed: cheap scorer, {cheap:.2f} (< 1 ms per pair)",
+        fontsize=6.5,
+        color=INK_2,
+        va="bottom",
+    )
+    for m in r["methods"]:
+        colour, filled = _method_style(m)
+        s = m["strict"]
+        x, (lo, hi), v = m["cost"]["seconds"], s["balanced_accuracy_ci95"], s["balanced_accuracy"]
+        ax.plot(
+            [x, x], [lo, hi], color=colour, lw=1.4, alpha=0.55, zorder=2, solid_capstyle="round"
+        )
+        ax.scatter(
+            [x], [v], s=40, zorder=3, color=colour if filled else "white", edgecolor=colour, lw=1.4
+        )
+        if m["variant"] == "no_find_later":  # above its interval, clear of the neighbours
+            xy, off, ha, va = (x, hi), (0, 4), "center", "bottom"
+        else:
+            xy, off, ha, va = (x, v), (7, 0), "left", "center"
+        ax.annotate(
+            f"{_method_label(m)}\n{v:.2f}, {x:.0f} s",
+            xy,
+            xytext=off,
+            textcoords="offset points",
+            fontsize=6.5,
+            ha=ha,
+            va=va,
+        )
+    ax.set_xscale("log")
+    ax.set_xlim(12, 600)
+    ax.set_xticks([15, 30, 60, 120, 240, 480], ["15", "30", "60", "120", "240", "480"])
+    ax.xaxis.set_minor_locator(matplotlib.ticker.NullLocator())
+    ax.set_ylim(0.55, 0.95)
+    ax.set_xlabel("seconds per pair (local Qwen 3.5, Apple M4, log scale)")
+    ax.set_ylabel("balanced accuracy (strict)")
+    fig.savefig(out / "fig_agent_cost.pdf")
     plt.close(fig)
     return True
 
@@ -453,6 +510,7 @@ def build(res: Path, out: Path) -> dict[str, bool]:
         "fig_answers": fig_answers(res, out),
         "fig_lineage": fig_lineage(res, out),
         "fig_agent": fig_agent(res, out),
+        "fig_agent_cost": fig_agent_cost(res, out),
         "fig_noise": fig_noise(res, out),
     }
 

@@ -420,7 +420,7 @@ def agent(num: Numbers, res: Path, files: dict) -> dict[str, str]:
         if i not in (0, split):
             x[0] = ""
     return {
-        "tab_agent": table(
+        "tab_agent_history": table(
             "lllrrlr",
             ["truth", "method", "prompt", "TPR", "TNR", "bal. acc. [95\\% CI]", "est. prec."],
             rows,
@@ -430,6 +430,117 @@ def agent(num: Numbers, res: Path, files: dict) -> dict[str, str]:
             "lllrrrrl",
             ["model", "prompt", "setting", "n", "failed", "steps", "s/pair", "labels"],
             log_rows,
+        ),
+    }
+
+
+VARIANT_LABEL = {
+    "llm_only": "LLM only (no tools)",
+    "no_find_later": r"agent without \texttt{find\_later}",
+    "full": "agent, all tools",
+}
+
+
+def agent_compare(num: Numbers, res: Path, files: dict, n: int = 100) -> dict[str, str]:
+    """The n-pair comparison of agent variants and the cheap scorer (``agent_compare``)."""
+    name = f"agent/compare_strict_n{n}.json"
+    r = load(res / name)
+    if not r:
+        return {}
+    files[f"Agent variants ({n} pairs)"] = name
+    num["ag.n"] = r["n"]
+    num["ag.half"] = r["n"] // 2
+    num["ag.band"] = f"[{r['band'][0]}, {r['band'][1]})"
+    num["ag.bandsize"] = f"{r['band_size']:,}".replace(",", "{,}")
+    num["ag.prior.strict"] = f2(r["band_positive_rate"])
+    num["ag.prior.strict.pct"] = p0(r["band_positive_rate"])
+    num["ag.prior.lineage"] = f2(r["band_positive_rate_lineage"])
+    num["ag.threshold"] = r["cheap_threshold"]
+
+    def put(key, m):
+        num[f"{key}.tpr"] = f2(m["tpr"])
+        num[f"{key}.tnr"] = f2(m["tnr"])
+        num[f"{key}.ba"] = f2(m["balanced_accuracy"])
+        num[f"{key}.ba.ci"] = ci(m.get("balanced_accuracy_ci95"), f2)
+        num[f"{key}.prec"] = f2(m["est_precision"])
+
+    def label(m):
+        return f"{VARIANT_LABEL.get(m['variant'], m['variant'])}, {tt(m['alias'])}"
+
+    rows, split = [], 0
+    for truth in ("strict", "lineage"):
+        if truth == "lineage":
+            split = len(rows)
+        entries = [("cheap scorer (v0)", r["cheap_scorer"][truth], None)]
+        entries += [(label(m), m[truth], m) for m in r["methods"]]
+        for i, (name_, m, meth) in enumerate(entries):
+            key = "ag.cheap" if meth is None else f"ag.{meth['alias']}.{meth['variant']}"
+            put(f"{key}.{truth}", m)
+            cost = "--" if meth is None else f"{meth['cost']['seconds']:.0f}"
+            rows.append(
+                [
+                    truth if i == 0 else "",
+                    name_,
+                    f2(m["tpr"]),
+                    f2(m["tnr"]),
+                    f"{f2(m['balanced_accuracy'])} {ci(m.get('balanced_accuracy_ci95'), f2)}",
+                    f2(m["est_precision"]),
+                    cost,
+                ]
+            )
+    cost_rows = []
+    for m in r["methods"]:
+        c, key = m["cost"], f"ag.{m['alias']}.{m['variant']}"
+        num[f"{key}.seconds"] = f"{c['seconds']:.0f}"
+        num[f"{key}.calls"] = f"{c['calls']:.1f}"
+        num[f"{key}.tools"] = f"{c['tool_calls']:.1f}"
+        num[f"{key}.intok"] = f"{c['input_tokens']:,.0f}".replace(",", "{,}")
+        num[f"{key}.outtok"] = f"{c['output_tokens']:,.0f}".replace(",", "{,}")
+        yes = m["labels"].get("supersedes", 0) / max(m["n_decided"], 1)
+        num[f"{key}.yes"] = p0(yes)
+        cost_rows.append(
+            [
+                label(m),
+                f"{c['seconds']:.0f}",
+                f"{c['calls']:.1f}",
+                f"{c['tool_calls']:.1f}",
+                f"{c['input_tokens']:,.0f}",
+                f"{c['output_tokens']:,.0f}",
+                p0(yes),
+            ]
+        )
+    for pc in r["paired"]:
+        a = pc["a"].split("/")
+        b = pc["b"].split("/")
+        ka = f"{a[0]}.{a[1]}"
+        kb = "cheap" if pc["b"] == "cheap scorer" else f"{b[0]}.{b[1]}"
+        for truth in ("strict", "lineage"):
+            d = pc[truth]
+            key = f"ag.pair.{ka}.{kb}.{truth}"
+            num[f"{key}.p"] = f"{d['mcnemar_p']:.2f}"
+            num[f"{key}.diff"] = f"{d['ba_diff']:+.2f}"
+            num[f"{key}.diff.ci"] = ci(d["ba_diff_ci95"], lambda x: f"{x:+.2f}")
+            num[f"{key}.aonly"] = d["a_only_correct"]
+            num[f"{key}.bonly"] = d["b_only_correct"]
+    return {
+        "tab_agent": table(
+            "llrrlrr",
+            ["truth", "method", "TPR", "TNR", "bal. acc. [95\\% CI]", "est. prec.", "s/pair"],
+            rows,
+            (split,),
+        ),
+        "tab_agent_cost": table(
+            "lrrrrrr",
+            [
+                "method",
+                "s/pair",
+                "model calls",
+                "tool calls",
+                "input tok.",
+                "output tok.",
+                "says replaces",
+            ],
+            cost_rows,
         ),
     }
 
@@ -521,6 +632,7 @@ def build(res: Path, data: Path, out: Path) -> dict[str, str]:
     tables |= lineage(num, res, files)
     noise(num, res, files)
     tables |= agent(num, res, files)
+    tables |= agent_compare(num, res, files)
     tables["agent_traces"] = agent_traces(res)
     num["meta.rev"] = git_rev()
     num["meta.date"] = datetime.now().strftime("%Y-%m-%d")

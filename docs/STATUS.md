@@ -95,3 +95,15 @@ The execution plan (workstreams A–F, dated to the 7 Dec talk) lives in the pri
   - Queues: `scripts/agent_queue.sh scripts/queues/nightN.txt` (sequential and resumable; put `/usr/local/bin` on PATH for `ollama`).
   - Nights: 1 = Qwen, 3 variants × 100 pairs; 2 = Ministral + variance; 3 = downstream questions (203 pairs); 4 = downstream titles with llm_only (1,798 pairs).
   - The old 20-pair runs (sample s1, not nested) are in `results/agent/history/`.
+
+### 2026-11-06: agent variants on 100 nested band pairs (night 1)
+- Qwen 3.5, prompt v2, strict band [0.8, 0.98), 50/50 sample. Balanced accuracy (strict):
+  cheap scorer 0.72 [0.63, 0.80]; llm_only 0.76 (35 s/pair); no_find_later 0.77 (96 s);
+  full 0.75 (151 s). No difference significant (McNemar p 0.5–1.0). Lineage truth:
+  0.69 vs 0.78–0.82; no_find_later vs scorer p = 0.02.
+- Tools add cost, not accuracy: llm_only and full agree on 93/100 pairs. All model
+  variants over-say "supersedes" (est. precision at the band prior 0.29 vs 0.36).
+- Paper: Q3b rebuilt from `results/agent/compare_strict_n100.json` (Figs. 7–8, Tables 5–6);
+  the 20-pair runs moved to Appendix B as prompt-development history.
+- Night 1 lost ~14 h to laptop sleep; `scripts/agent_queue.sh` now runs under `caffeinate`.
+  Night 2 (Ministral full + temperature-0.3 repeats) started 14:22.

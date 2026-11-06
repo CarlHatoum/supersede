@@ -6,6 +6,10 @@
 #
 #   scripts/agent_queue.sh scripts/queues/night1.txt
 set -u
+# Keep the Mac awake for the whole queue (a sleeping laptop stalls Ollama).
+if [ -z "${CAFFEINATED:-}" ] && command -v caffeinate >/dev/null; then
+  CAFFEINATED=1 exec caffeinate -i -s "$0" "$@"
+fi
 queue="$1"
 py="${PY:-.venv/bin/python}"
 log_dir="results/agent/logs"

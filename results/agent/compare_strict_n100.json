@@ -37,7 +37,290 @@
       "n_neg": 44
     }
   },
-  "methods": [],
-  "paired": [],
+  "methods": [
+    {
+      "model": "ollama:edtorre/qwen3.5-hermes",
+      "alias": "qwen3.5-hermes",
+      "variant": "full",
+      "prompt": "agent-v2",
+      "n_decided": 100,
+      "labels": {
+        "supersedes": 59,
+        "amends": 3,
+        "unrelated": 38
+      },
+      "cost": {
+        "seconds": 150.806,
+        "calls": 4.05,
+        "input_tokens": 5437.21,
+        "output_tokens": 803.19,
+        "tool_calls": 2.05,
+        "tool_calls_by_name": {
+          "compare": 1.0,
+          "find_later": 1.0,
+          "read_doc": 0.05
+        },
+        "share_of_pairs_using": {
+          "compare": 1.0,
+          "find_later": 1.0,
+          "read_doc": 0.05
+        }
+      },
+      "strict": {
+        "tpr": 0.84,
+        "tnr": 0.66,
+        "balanced_accuracy": 0.75,
+        "balanced_accuracy_ci95": [
+          0.66,
+          0.8300000000000001
+        ],
+        "est_precision": 0.28937155064981307,
+        "n_pos": 50,
+        "n_neg": 50
+      },
+      "lineage": {
+        "tpr": 0.8392857142857143,
+        "tnr": 0.7272727272727273,
+        "balanced_accuracy": 0.7832792207792207,
+        "balanced_accuracy_ci95": [
+          0.7037337662337663,
+          0.8668831168831169
+        ],
+        "est_precision": 0.5030650245130097,
+        "n_pos": 56,
+        "n_neg": 44
+      }
+    },
+    {
+      "model": "ollama:edtorre/qwen3.5-hermes",
+      "alias": "qwen3.5-hermes",
+      "variant": "llm_only",
+      "prompt": "agent-v2",
+      "n_decided": 100,
+      "labels": {
+        "supersedes": 62,
+        "unrelated": 36,
+        "amends": 2
+      },
+      "cost": {
+        "seconds": 35.111,
+        "calls": 1.0,
+        "input_tokens": 594.88,
+        "output_tokens": 186.3,
+        "tool_calls": 0.0,
+        "tool_calls_by_name": {},
+        "share_of_pairs_using": {}
+      },
+      "strict": {
+        "tpr": 0.88,
+        "tnr": 0.64,
+        "balanced_accuracy": 0.76,
+        "balanced_accuracy_ci95": [
+          0.6799999999999999,
+          0.84
+        ],
+        "est_precision": 0.28718882817243474,
+        "n_pos": 50,
+        "n_neg": 50
+      },
+      "lineage": {
+        "tpr": 0.875,
+        "tnr": 0.7045454545454546,
+        "balanced_accuracy": 0.7897727272727273,
+        "balanced_accuracy_ci95": [
+          0.7021103896103896,
+          0.8758116883116883
+        ],
+        "est_precision": 0.49347293088595856,
+        "n_pos": 56,
+        "n_neg": 44
+      }
+    },
+    {
+      "model": "ollama:edtorre/qwen3.5-hermes",
+      "alias": "qwen3.5-hermes",
+      "variant": "no_find_later",
+      "prompt": "agent-v2",
+      "n_decided": 100,
+      "labels": {
+        "supersedes": 65,
+        "unrelated": 29,
+        "amends": 6
+      },
+      "cost": {
+        "seconds": 95.755,
+        "calls": 3.2,
+        "input_tokens": 3258.8,
+        "output_tokens": 481.31,
+        "tool_calls": 1.29,
+        "tool_calls_by_name": {
+          "compare": 1.0,
+          "read_doc": 0.21,
+          "search": 0.08
+        },
+        "share_of_pairs_using": {
+          "compare": 1.0,
+          "read_doc": 0.1,
+          "search": 0.08
+        }
+      },
+      "strict": {
+        "tpr": 0.92,
+        "tnr": 0.62,
+        "balanced_accuracy": 0.77,
+        "balanced_accuracy_ci95": [
+          0.69,
+          0.8400000000000001
+        ],
+        "est_precision": 0.28522446886916397,
+        "n_pos": 50,
+        "n_neg": 50
+      },
+      "lineage": {
+        "tpr": 0.9285714285714286,
+        "tnr": 0.7045454545454546,
+        "balanced_accuracy": 0.8165584415584416,
+        "balanced_accuracy_ci95": [
+          0.7353896103896104,
+          0.8936688311688312
+        ],
+        "est_precision": 0.5083276450511945,
+        "n_pos": 56,
+        "n_neg": 44
+      }
+    }
+  ],
+  "paired": [
+    {
+      "a": "qwen3.5-hermes/full/agent-v2",
+      "b": "cheap scorer",
+      "strict": {
+        "n": 100,
+        "a_only_correct": 21,
+        "b_only_correct": 18,
+        "mcnemar_p": 0.7492586247608415,
+        "ba_diff": 0.030000000000000027,
+        "ba_diff_ci95": [
+          -0.08000000000000007,
+          0.15000000000000013
+        ]
+      },
+      "lineage": {
+        "n": 100,
+        "a_only_correct": 25,
+        "b_only_correct": 14,
+        "mcnemar_p": 0.10812902140605729,
+        "ba_diff": 0.08847402597402598,
+        "ba_diff_ci95": [
+          -0.021915584415584388,
+          0.20779220779220775
+        ]
+      }
+    },
+    {
+      "a": "qwen3.5-hermes/llm_only/agent-v2",
+      "b": "cheap scorer",
+      "strict": {
+        "n": 100,
+        "a_only_correct": 22,
+        "b_only_correct": 18,
+        "mcnemar_p": 0.6358280026288412,
+        "ba_diff": 0.040000000000000036,
+        "ba_diff_ci95": [
+          -0.07000000000000006,
+          0.16000000000000014
+        ]
+      },
+      "lineage": {
+        "n": 100,
+        "a_only_correct": 26,
+        "b_only_correct": 14,
+        "mcnemar_p": 0.0806904677519924,
+        "ba_diff": 0.09496753246753253,
+        "ba_diff_ci95": [
+          -0.016233766233766378,
+          0.21266233766233766
+        ]
+      }
+    },
+    {
+      "a": "qwen3.5-hermes/no_find_later/agent-v2",
+      "b": "cheap scorer",
+      "strict": {
+        "n": 100,
+        "a_only_correct": 21,
+        "b_only_correct": 16,
+        "mcnemar_p": 0.5113757815852296,
+        "ba_diff": 0.050000000000000044,
+        "ba_diff_ci95": [
+          -0.06000000000000005,
+          0.16000000000000003
+        ]
+      },
+      "lineage": {
+        "n": 100,
+        "a_only_correct": 26,
+        "b_only_correct": 11,
+        "mcnemar_p": 0.020073851919732988,
+        "ba_diff": 0.12175324675324684,
+        "ba_diff_ci95": [
+          0.01298701298701288,
+          0.22970779220779214
+        ]
+      }
+    },
+    {
+      "a": "qwen3.5-hermes/full/agent-v2",
+      "b": "qwen3.5-hermes/llm_only/agent-v2",
+      "strict": {
+        "n": 100,
+        "a_only_correct": 3,
+        "b_only_correct": 4,
+        "mcnemar_p": 1.0,
+        "ba_diff": -0.010000000000000009,
+        "ba_diff_ci95": [
+          -0.06999999999999984,
+          0.040000000000000036
+        ]
+      },
+      "lineage": {
+        "n": 100,
+        "a_only_correct": 3,
+        "b_only_correct": 4,
+        "mcnemar_p": 1.0,
+        "ba_diff": -0.006493506493506551,
+        "ba_diff_ci95": [
+          -0.058441558441558406,
+          0.04788961038961026
+        ]
+      }
+    },
+    {
+      "a": "qwen3.5-hermes/full/agent-v2",
+      "b": "qwen3.5-hermes/no_find_later/agent-v2",
+      "strict": {
+        "n": 100,
+        "a_only_correct": 6,
+        "b_only_correct": 8,
+        "mcnemar_p": 0.79052734375,
+        "ba_diff": -0.020000000000000018,
+        "ba_diff_ci95": [
+          -0.09000000000000008,
+          0.050000000000000044
+        ]
+      },
+      "lineage": {
+        "n": 100,
+        "a_only_correct": 5,
+        "b_only_correct": 9,
+        "mcnemar_p": 0.4239501953125,
+        "ba_diff": -0.03327922077922085,
+        "ba_diff_ci95": [
+          -0.1071428571428571,
+          0.038961038961038974
+        ]
+      }
+    }
+  ],
   "stability": []
 }
