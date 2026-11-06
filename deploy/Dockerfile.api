@@ -1,0 +1,26 @@
+# Supersede API: FastAPI + MCP (streamable HTTP at /mcp), CPU only.
+# The corpus, embeddings and inferred lineage are built into the image, so a cold
+# start only loads files. Build from the repository root:
+#   docker build -f deploy/Dockerfile.api -t supersede-api .
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 UV_SYSTEM_PYTHON=1 HF_HOME=/opt/hf \
+    SUPERSEDE_DATA=/app/data/rfc PORT=8080
+RUN pip install --no-cache-dir uv==0.9.5
+WORKDIR /app
+
+# CPU-only torch first, so sentence-transformers does not pull the CUDA build.
+RUN uv pip install --no-cache torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+COPY pyproject.toml README.md LICENSE ./
+COPY src ./src
+RUN uv pip install --no-cache '.[dense,agent,serve]'
+
+# Corpus (pinned RFC index snapshot), dense embeddings and librarian-v0 lineage.
+ARG RFC_INDEX_SHA256=e1669ddd5a87561fe548e737865f486e376ae58b5011a73a92a72f0aac32363a
+RUN python -m supersede.bench.rfc --out data/rfc --expect-sha256 ${RFC_INDEX_SHA256} \
+ && rm -rf data/rfc/raw \
+ && python -c "from pathlib import Path; from supersede.serve.app import Service; \
+print(Service.load(Path('data/rfc')).info)"
+
+EXPOSE 8080
+CMD exec uvicorn supersede.serve.app:app --host 0.0.0.0 --port ${PORT} --log-level warning

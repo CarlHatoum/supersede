@@ -1,0 +1,12 @@
+# Ollama with the librarian's model baked in (no download at cold start).
+# Runs on Cloud Run with an NVIDIA L4; scales to zero when idle.
+#   docker build -f deploy/Dockerfile.llm -t supersede-llm .
+FROM ollama/ollama:0.12.6
+
+ARG MODEL=edtorre/qwen3.5-hermes
+ENV OLLAMA_HOST=0.0.0.0:8080 OLLAMA_MODELS=/models OLLAMA_KEEP_ALIVE=-1 \
+    OLLAMA_NUM_PARALLEL=4
+RUN ollama serve & sleep 5 && ollama pull ${MODEL} && kill %1
+
+EXPOSE 8080
+ENTRYPOINT ["ollama", "serve"]

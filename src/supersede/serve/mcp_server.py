@@ -20,8 +20,6 @@ from mcp.server.fastmcp import FastMCP
 
 from supersede.librarian.tools import CorpusTools, load_corpus_tools
 
-mcp = FastMCP("supersede-librarian", log_level="WARNING")
-
 
 @lru_cache(maxsize=1)
 def corpus() -> CorpusTools:
@@ -31,29 +29,35 @@ def corpus() -> CorpusTools:
     )
 
 
-@mcp.tool()
-def search(query: str, k: int = 10) -> list[dict]:
-    """Search the document collection. Returns the most relevant documents (ID, title, year)."""
-    return corpus().search(query, k)
+def build_mcp() -> FastMCP:
+    """A fresh server (an HTTP session manager can run only once per server)."""
+    mcp = FastMCP("supersede-librarian", log_level="WARNING")
+
+    @mcp.tool()
+    def search(query: str, k: int = 10) -> list[dict]:
+        """Search the document collection. Returns the most relevant documents (ID, title, year)."""
+        return corpus().search(query, k)
+
+    @mcp.tool()
+    def read_doc(doc_id: str) -> dict:
+        """Read one document: title, year, keywords and abstract."""
+        return corpus().read_doc(doc_id)
+
+    @mcp.tool()
+    def find_later(doc_id: str, k: int = 8) -> list[dict]:
+        """Documents on the same topic as doc_id, published the same year or later: candidate
+        replacements, best match first."""
+        return corpus().find_later(doc_id, k)
+
+    @mcp.tool()
+    def compare(doc_a: str, doc_b: str) -> dict:
+        """Compare two documents side by side, with word-overlap signals and which one is older."""
+        return corpus().compare(doc_a, doc_b)
+
+    return mcp
 
 
-@mcp.tool()
-def read_doc(doc_id: str) -> dict:
-    """Read one document: title, year, keywords and abstract."""
-    return corpus().read_doc(doc_id)
-
-
-@mcp.tool()
-def find_later(doc_id: str, k: int = 8) -> list[dict]:
-    """Documents on the same topic as doc_id, published the same year or later: candidate
-    replacements, best match first."""
-    return corpus().find_later(doc_id, k)
-
-
-@mcp.tool()
-def compare(doc_a: str, doc_b: str) -> dict:
-    """Compare two documents side by side, with word-overlap signals and which one is older."""
-    return corpus().compare(doc_a, doc_b)
+mcp = build_mcp()
 
 
 def main() -> None:
