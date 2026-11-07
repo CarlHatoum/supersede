@@ -516,123 +516,153 @@ def fig_noise(res: Path, out: Path) -> bool:
 
 
 # --- Figures for the dataset card (PNG only) -------------------------------------
-# The worked example of the paper's Fig. 1: the hybrid retriever's top 3 for the
-# query "TCP Congestion Control", and the same list after promote with lineage.
-EXAMPLE_QUERY = "TCP Congestion Control"
-EXAMPLE_RANKING = ["RFC2581", "RFC5681", "RFC896"]
+# A worked example of the data (no results): one lineage, one query row on it, and
+# the explicit cue that the strict view removes.
 EXAMPLE_CHAIN = ["RFC2001", "RFC2581", "RFC5681"]
+EXAMPLE_QID = "rfc-new_title-RFC2001-RFC2581"
 
 
-def _doc_box(ax, x, y, w, rank, d, tag, colour):
+def _box(ax, x, y, w, h, ec, lw=0.9, fc="white"):
     from matplotlib.patches import FancyBboxPatch
 
     ax.add_patch(
         FancyBboxPatch(
-            (x, y - 0.075),
-            w,
-            0.15,
-            boxstyle="round,pad=0,rounding_size=0.015",
-            fc="white",
-            ec=colour if tag else GREY_LIGHT,
-            lw=1.3 if tag else 0.8,
+            (x, y), w, h, boxstyle="round,pad=0,rounding_size=0.015", fc=fc, ec=ec, lw=lw
         )
     )
-    num = d.doc_id.replace("RFC", "RFC ")
-    ax.text(x + 0.015, y, f"{rank}", fontsize=8, fontweight="bold", va="center")
-    ax.text(x + 0.045, y + 0.02, f"{num} · {d.year}", fontsize=7.5, fontweight="bold", va="center")
+
+
+def _cue(abstract: str, old: str) -> str:
+    """The sentence of ``abstract`` that names ``old`` with a supersession verb."""
+    import re
+
+    num = old.replace("RFC", "")
+    for sent in re.split(r"(?<=[.])\s+", abstract):
+        if re.search(rf"RFC\s*{num}\b", sent) and re.search(r"obsolet|supersed|replac", sent):
+            return sent.strip()
+    return ""
+
+
+def fig_card_example(docs: dict, graph, query: dict | None, out: Path) -> bool:
+    if not all(d in docs for d in EXAMPLE_CHAIN) or query is None:
+        return False
+    fig = plt.figure(figsize=(WIDTH, 3.0))
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis("off")
+
+    # 1. the lineage
     ax.text(
-        x + 0.045,
-        y - 0.035,
-        d.title[:34] + ("…" if len(d.title) > 34 else ""),
-        fontsize=6.5,
-        color=INK_2,
+        0.01,
+        0.95,
+        "1  a lineage in the index (lineage + corpus configs)",
+        fontsize=8,
+        fontweight="bold",
         va="center",
     )
-    if tag:
+    xs, w = [0.02, 0.355, 0.69], 0.29
+    for i, (x, d) in enumerate(zip(xs, EXAMPLE_CHAIN, strict=True)):
+        doc = docs[d]
+        current = not graph.is_superseded(d)
+        colour = AQUA if current else ORANGE
+        _box(ax, x, 0.66, w, 0.2, colour, lw=1.2)
+        ax.text(
+            x + 0.012,
+            0.815,
+            f"{d.replace('RFC', 'RFC ')} · {doc.year}",
+            fontsize=7.5,
+            fontweight="bold",
+            va="center",
+        )
         ax.text(
             x + w - 0.012,
-            y + 0.02,
-            tag,
+            0.815,
+            "current" if current else "superseded",
             fontsize=6.5,
             fontweight="bold",
             color=colour,
             ha="right",
             va="center",
         )
-
-
-def fig_card_problem(docs: dict, graph, out: Path) -> bool:
-    from supersede.rerank import promote_current
-
-    if not all(d in docs for d in EXAMPLE_RANKING + EXAMPLE_CHAIN):
-        return False
-    fig = plt.figure(figsize=(WIDTH, 2.75))
-    ax = fig.add_axes([0, 0, 1, 1])
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    ax.axis("off")
-
-    def tag(doc_id):
-        if graph.is_superseded(doc_id):
-            return "obsolete", ORANGE
-        if any(doc_id in graph.current_versions(r) for r in EXAMPLE_RANKING if r != doc_id):
-            return "current", AQUA
-        return "", GREY
-
-    ax.text(0.01, 0.95, f"query: “{EXAMPLE_QUERY}”", fontsize=8.5, fontweight="bold", va="center")
-    lists = [
-        ("as retrieved (hybrid, top 3)", EXAMPLE_RANKING, 0.02),
-        (
-            "with lineage (promote current versions)",
-            promote_current(EXAMPLE_RANKING, graph)[:3],
-            0.53,
-        ),
-    ]
-    for title, ranking, x in lists:
-        ax.text(x, 0.84, title, fontsize=7.5, color=INK_2, va="center")
-        for i, d in enumerate(ranking):
-            t, c = tag(d)
-            _doc_box(ax, x, 0.72 - 0.17 * i, 0.45, i + 1, docs[d], t, c)
-    ax.annotate(
-        "", (0.525, 0.55), (0.475, 0.55), arrowprops={"arrowstyle": "-|>", "color": INK_2, "lw": 1}
-    )
-    # lineage strip
-    ax.text(0.02, 0.135, "lineage in the index:", fontsize=7.5, color=INK_2, va="center")
-    xs = [0.24, 0.49, 0.74]
-    for i, (x, d) in enumerate(zip(xs, EXAMPLE_CHAIN, strict=True)):
-        head = not graph.is_superseded(d)
-        ax.text(
-            x,
-            0.135,
-            f"{d.replace('RFC', 'RFC ')} ({docs[d].year})",
-            fontsize=7.5,
-            fontweight="bold",
-            va="center",
-            ha="left",
-            color=AQUA if head else INK,
-            bbox={
-                "boxstyle": "round,pad=0.35",
-                "fc": "white",
-                "ec": AQUA if head else GREY_LIGHT,
-                "lw": 0.9,
-            },
-        )
+        title = doc.title if len(doc.title) <= 40 else doc.title[:38] + "…"
+        ax.text(x + 0.012, 0.715, title, fontsize=6.3, color=INK_2, va="center")
         if i:
             ax.annotate(
                 "",
-                (x - 0.012, 0.135),
-                (xs[i - 1] + 0.165, 0.135),
+                (x - 0.004, 0.76),
+                (xs[i - 1] + w + 0.004, 0.76),
                 arrowprops={"arrowstyle": "-|>", "color": INK_2, "lw": 0.9},
             )
-            ax.text(
-                (x + xs[i - 1] + 0.153) / 2,
-                0.2,
-                "obsoleted by",
-                fontsize=6,
-                color=INK_2,
-                ha="center",
-            )
-    fig.savefig(out / "fig_card_problem.png", dpi=200, facecolor="white")
+    ax.text((xs[0] + w + xs[1]) / 2, 0.895, "obsoleted by", fontsize=6, color=INK_2, ha="center")
+    ax.text((xs[1] + w + xs[2]) / 2, 0.895, "obsoleted by", fontsize=6, color=INK_2, ha="center")
+
+    # 2. a query row on that lineage
+    ax.text(
+        0.01,
+        0.56,
+        "2  a row of the queries config on it",
+        fontsize=8,
+        fontweight="bold",
+        va="center",
+    )
+    _box(ax, 0.02, 0.33, 0.96, 0.18, GREY_LIGHT, fc="#f7f6f3")
+    ax.text(0.035, 0.455, f"text: “{query['text']}”", fontsize=7.5, va="center")
+    ax.text(0.035, 0.455 - 0.0, "", fontsize=7)
+    ax.text(
+        0.97,
+        0.455,
+        f"variant: {query['variant']}  ·  split: {query['split']}",
+        fontsize=6.5,
+        color=INK_2,
+        ha="right",
+        va="center",
+    )
+    cur = ", ".join(x.replace("RFC", "RFC ") for x in query["current"])
+    stale = ", ".join(x.replace("RFC", "RFC ") for x in query["stale"])
+    ax.text(0.035, 0.375, "current:", fontsize=7, color=INK_2, va="center")
+    ax.text(0.095, 0.375, cur, fontsize=7, fontweight="bold", color=AQUA, va="center")
+    ax.text(0.23, 0.375, "stale:", fontsize=7, color=INK_2, va="center")
+    ax.text(0.275, 0.375, stale, fontsize=7, fontweight="bold", color=ORANGE, va="center")
+    ax.text(
+        0.97,
+        0.375,
+        "a good system ranks a current ID first",
+        fontsize=6.5,
+        color=INK_2,
+        ha="right",
+        va="center",
+        style="italic",
+    )
+
+    # 3. the cue that the strict view removes
+    new, old = EXAMPLE_CHAIN[-1], EXAMPLE_CHAIN[-2]
+    cue = _cue(docs[new].abstract, old)
+    ax.text(
+        0.01,
+        0.23,
+        "3  the explicit cue hidden for lineage inference",
+        fontsize=8,
+        fontweight="bold",
+        va="center",
+    )
+    ax.text(
+        0.035,
+        0.14,
+        f"{new.replace('RFC', 'RFC ')}'s abstract says: “{cue}”",
+        fontsize=7,
+        va="center",
+    )
+    ax.text(
+        0.035,
+        0.07,
+        "masking.py masks RFC numbers (masked) and drops such "
+        "sentences (strict); a model must infer the link from content.",
+        fontsize=6.5,
+        color=INK_2,
+        va="center",
+    )
+    fig.savefig(out / "fig_card_example.png", dpi=200, facecolor="white")
     plt.close(fig)
     return True
 
@@ -679,11 +709,19 @@ def card_figures(data: Path, out: Path) -> dict[str, bool]:
 
     if not (data / "corpus.jsonl").exists():
         return {}
+    from supersede.corpus import read_jsonl
+
     docs = load_docs(data / "corpus.jsonl")
     graph = LineageGraph(docs)
+    qpath = data / "queries.jsonl"
+    query = (
+        next((q for q in read_jsonl(qpath) if q["qid"] == EXAMPLE_QID), None)
+        if qpath.exists()
+        else None
+    )
     out.mkdir(parents=True, exist_ok=True)
     return {
-        "fig_card_problem": fig_card_problem({d.doc_id: d for d in docs}, graph, out),
+        "fig_card_example": fig_card_example({d.doc_id: d for d in docs}, graph, query, out),
         "fig_card_corpus": fig_card_corpus(docs, graph, out),
     }
 

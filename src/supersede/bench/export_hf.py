@@ -82,13 +82,7 @@ def apply(row: dict, setting: str) -> dict:
 '''
 
 
-def export(
-    data: Path,
-    out: Path,
-    with_pairs: bool = True,
-    results: Path | None = None,
-    figures: Path | None = None,
-) -> dict:
+def export(data: Path, out: Path, with_pairs: bool = True, figures: Path | None = None) -> dict:
     docs = load_docs(data / "corpus.jsonl")
     graph = LineageGraph(docs)
     manifest = json.loads((data / "manifest.json").read_text())
@@ -166,8 +160,16 @@ def export(
         )
     )
     assets = copy_figures(figures, out / "assets") if figures else set()
-    nums = card_numbers(results, data) if results else {}
-    examples = {}
+    examples = {
+        "lineage": next(
+            (e for e in edges["test"] + edges["dev"] if (e["old"], e["new"]) == EXAMPLE_EDGE),
+            (edges["test"] or [None])[0],
+        ),
+        "queries": next(
+            (q for q in queries["test"] + queries["dev"] if q["qid"] == EXAMPLE_QID),
+            (queries["test"] or [None])[0],
+        ),
+    }
     if questions["test"]:
         # A short question about a concrete change (a mechanism, value or requirement).
         rank = {"mechanism": 0, "value": 0, "requirement": 0, "scope": 1}
@@ -177,15 +179,14 @@ def export(
         )
     if with_pairs:
         examples["pairs"] = next((r for r in by_split["test"] if r["label"]), None)
-    (out / "README.md").write_text(
-        card(manifest, qmanifest, counts, questions, nums, assets, examples)
-    )
+    (out / "README.md").write_text(card(manifest, qmanifest, counts, questions, assets, examples))
     return counts
 
 
 def copy_figures(src: Path, dst: Path) -> set[str]:
     import shutil
 
+    shutil.rmtree(dst, ignore_errors=True)  # no stale figures from earlier exports
     dst.mkdir(parents=True, exist_ok=True)
     done = set()
     for name in CARD_FIGURES:
@@ -208,52 +209,49 @@ def _write_splits(folder: Path, by_split: dict[str, list[dict]]) -> dict[str, in
 REPO = "hatoum/supersede-rfc"
 GITHUB = "https://github.com/CarlHatoum/supersede"
 ASSETS = f"https://huggingface.co/datasets/{REPO}/resolve/main/assets"
-# Card figures, copied from the paper build (``make paper``) into ``assets/``.
-CARD_FIGURES = (
-    "fig_card_problem",
-    "fig_card_corpus",
-    "fig_retrieval",
-    "fig_answers",
-    "fig_lineage",
-    "fig_agent",
-)
-
+# Data-only figures for the card, built by ``supersede.report.figures`` (make paper).
+CARD_FIGURES = ("fig_card_example", "fig_card_corpus")
+EXAMPLE_EDGE = ("RFC2581", "RFC5681")
+EXAMPLE_QID = "rfc-new_title-RFC2001-RFC2581"
 
 TASK_TABLE = "\n".join(
     [
-        "| **1. Retrieval staleness** | `queries` or `questions` + `corpus` "
-        "| `current`, `stale` IDs | stale@1 ↓, current@k ↑ |",
-        "| **2. Answer staleness** | `questions` (+ retrieved context) "
-        "| `answer_current`, `answer_stale` | share of stale answers ↓ |",
-        "| **3. Lineage inference** | `pairs` + `corpus` (`strict` view) "
-        "| `label`, `label_lineage` | edge F1; gap closed downstream |",
+        "| **1. Retrieval staleness** | a query (`queries` or `questions`) over `corpus` "
+        "| `current` and `stale` document IDs | stale@1 ↓, current@k ↑ |",
+        "| **2. Answer staleness** | a question + the documents a system retrieves "
+        "| `answer_current`, `answer_stale` | share of answers giving the old answer ↓ |",
+        "| **3. Lineage inference** | `pairs` + `corpus` in the `strict` view "
+        "| `label` (direct link), `label_lineage` (via a chain) | edge precision / recall / F1 |",
     ]
 )
 
+BUILD_STEPS = """\
+1. **Corpus.** Every RFC in the RFC Editor's index (`rfc-index.xml`, pinned snapshot):
+   title, abstract, keywords, year, status.
+2. **Lineage.** The index's *obsoletes* / *obsoleted-by* fields, read from both sides,
+   give the supersession graph. A lineage is a connected chain of versions; its
+   *current versions* are the documents at the end of it.
+3. **Splits.** Each lineage goes entirely to `dev` (about 30%) or `test` (about 70%),
+   so nothing about a lineage leaks across splits.
+4. **Title queries.** For each link, the old title and the new title become queries.
+   The current versions are correct answers; older members of the lineage are stale.
+5. **Change-aware questions.** For a sample of links, an LLM read both abstracts and
+   wrote a question whose answer changed between the versions, with both answers and
+   verbatim evidence. Deterministic checks rejected unsupported or leaky questions.
+6. **Candidate pairs.** For lineage inference, each RFC is paired with its nearest
+   neighbours (abstract and title embeddings), older first, and labelled from the graph."""
 
-def plain(value: str) -> str:
-    """A number from the paper's generator, without its LaTeX escapes."""
-    return value.replace(r"\%", "%").replace("{,}", ",").replace("--", "–").replace("~", " ")
-
-
-def card_numbers(results: Path, data: Path) -> dict[str, str]:
-    """The paper's numbers (``supersede.report.paper``), as plain text."""
-    import tempfile
-
-    from supersede.report.paper import build as build_numbers
-
-    if not results.exists():
-        return {}
-    with tempfile.TemporaryDirectory() as tmp:
-        values = build_numbers(results, data, Path(tmp))
-    return {k: plain(v) for k, v in values.items()}
-
-
-def _sentence(nums: dict[str, str], template: str, *keys: str) -> str:
-    """``template`` filled with the numbers, or nothing if one is missing."""
-    if not all(k in nums and nums[k] not in ("--", "") for k in keys):
-        return ""
-    return template.format(*(nums[k] for k in keys))
+METRICS = """\
+- **stale@1**: share of queries whose top result is in `stale` (lower is better).
+- **current@k**: share of queries with an ID from `current` in the top k (higher is better).
+- **Answer staleness**: compare a generated answer with `answer_current` and
+  `answer_stale` (we use an LLM judge with the labels current / stale /
+  mixed-flagged / mixed-unflagged / abstain); report the share that conveys the old
+  answer as if it were in force.
+- **Lineage inference**: predict which `pairs` are links (`old → new`), then precision,
+  recall and F1 against `label` (strict) or `label_lineage` (a later version in the same
+  chain also counts). Use only `doc_id`, `title`, `abstract`, `keywords`, `year` in the
+  `strict` view: the lineage fields and the explicit sentences give the answer away."""
 
 
 def _img(assets: set[str], name: str, alt: str) -> str:
@@ -269,11 +267,10 @@ def card(
     qmanifest: dict,
     counts: dict,
     questions: dict,
-    nums: dict[str, str] | None = None,
     assets: set[str] | frozenset[str] = frozenset(),
     examples: dict[str, dict] | None = None,
 ) -> str:
-    nums, examples = nums or {}, examples or {}
+    examples = examples or {}
     configs = []
     for name, splits in counts.items():
         files = "\n".join(
@@ -291,7 +288,7 @@ def card(
 
     what = {
         "corpus": "every RFC: title, abstract, keywords, year, status, lineage fields",
-        "lineage": "supersession edges `old → new` (the ground truth)",
+        "lineage": "supersession links `old → new` (the ground truth)",
         "queries": "title queries, with current and stale document IDs",
         "questions": "change-aware questions, with the old and the new answer",
         "pairs": "candidate document pairs for lineage inference, labelled",
@@ -302,84 +299,21 @@ def card(
         + " |"
         for name, splits in counts.items()
     )
+    hero = _img(
+        assets,
+        "fig_card_example",
+        "One lineage (RFC 2001 → 2581 → 5681), a query row on it, and the cue hidden "
+        "for lineage inference",
+    )
+    corpus_img = _img(assets, "fig_card_corpus", "RFCs per decade, share later superseded")
 
-    retrieval = " ".join(
-        x
-        for x in (
-            _sentence(
-                nums,
-                "On change-aware questions, a hybrid retriever (BM25 + dense) puts the "
-                "**obsolete version first {} of the time** (95% CI {}); BM25 {}, dense {}.",
-                "qret.hybrid.none.stale1.pct",
-                "qret.hybrid.none.stale1.cipct",
-                "qret.bm25.none.stale1.pct",
-                "qret.dense.none.stale1.pct",
-            ),
-            _sentence(
-                nums,
-                "Promoting the current version with the true lineage brings this to {} "
-                "and puts the current document first {} of the time.",
-                "qret.hybrid.promote.stale1.pct",
-                "qret.hybrid.promote.current1.pct",
-            ),
-        )
-        if x
-    )
-    answers = " ".join(
-        x
-        for x in (
-            _sentence(
-                nums,
-                "When the context hides years and RFC numbers, **{} of RAG answers are "
-                "stale**; showing both versions with the old one marked brings this to {}.",
-                "ans.blind.naive.stale_outcome",
-                "ans.blind.show_conflict.stale_outcome",
-            ),
-            _sentence(
-                nums,
-                "Without any documents the same model knows the current answer {} of the "
-                "time: retrieval of the old version *overrides* knowledge it has "
-                "({} of those answers turn stale).",
-                "cb.current",
-                "cb.blind.naive.override",
-            ),
-        )
-        if x
-    )
-    lineage = " ".join(
-        x
-        for x in (
-            _sentence(
-                nums,
-                "With every explicit cue removed (`strict`), a cheap similarity-and-date "
-                "scorer closes {} of the gap to perfect lineage on title queries, and "
-                "simple version chains {}.",
-                "lin.strict.logreg.title.gap",
-                "lin.strict.version_chains.title.gap",
-            ),
-            _sentence(
-                nums,
-                "On the {} pairs the scorer finds ambiguous, a local 9.7B model reaches "
-                "{} balanced accuracy in one call and {} as a tool-using agent, against "
-                "{} for the scorer.",
-                "ag.n",
-                "ag.qwen3.5-hermes.llm_only.strict.ba",
-                "ag.qwen3.5-hermes.full.strict.ba",
-                "ag.cheap.strict.ba",
-            ),
-        )
-        if x
-    )
-
-    ex_q = examples.get("questions")
-    ex_p = examples.get("pairs")
     example_blocks = "\n\n".join(
-        _details(title, "```json\n" + json.dumps(row, indent=2, ensure_ascii=False) + "\n```")
-        for title, row in (
-            ("Example row: <code>questions</code>", ex_q),
-            ("Example row: <code>pairs</code>", ex_p),
+        _details(
+            f"Example row: <code>{name}</code>",
+            "```json\n" + json.dumps(row, indent=2, ensure_ascii=False) + "\n```",
         )
-        if row
+        for name in ("lineage", "queries", "questions", "pairs")
+        if (row := examples.get(name))
     )
 
     fields = "\n\n".join(
@@ -390,36 +324,37 @@ def card(
 `doc_id`, `title`, `abstract` (verbatim from the index; line-break hyphenation and
 typesetting hints removed), `keywords`, `year`, `status`, the index's lineage fields
 (`obsoletes`, `obsoleted_by`, `updates`, `updated_by`), and derived `is_superseded`,
-`current_versions` (heads reached by following successors). `updates` is a partial
-amendment, not supersession, and is not used as ground truth.
+`current_versions` (the documents reached by following replacements to the end).
+`updates` is a partial amendment, not a replacement, and is not used as ground truth.
 
 **For lineage inference**, hide the lineage fields: many abstracts state the answer
-("This document obsoletes RFC 2581"). Use `doc_id`, `title`, `abstract`, `keywords`,
-`year`, transformed with `masking.py`: `masked` replaces RFC numbers with `[REF]`;
-`strict` also drops sentences with a supersession verb. The transformed text is not
-shipped because the IETF licence does not permit redistributing modified RFC text.""",
+("This document obsoletes RFC 2581"). Transform the text with `masking.py`: `masked`
+replaces RFC numbers with `[REF]`; `strict` also drops sentences with a supersession
+verb. The transformed text is not shipped because the IETF licence does not permit
+redistributing modified RFC text.""",
             ),
             _details(
                 "lineage",
-                "One row per supersession edge `old → new`, declared on either side of "
-                "the index. `component`: the lineage it belongs to.",
+                "One row per supersession link `old → new`, declared on either side of "
+                "the index. `component`: the lineage it belongs to (named by its "
+                "lowest-numbered RFC). `split`: dev or test.",
             ),
             _details(
                 "queries",
                 """\
-Title queries: the old title (`variant: old_title`) or the new title (`new_title`) of an
-edge. `current`: IDs that are correct; `stale`: superseded IDs of the same lineage.
-Metrics: `stale@1` (top hit is stale) and `current@k`.""",
+Title queries: the old title (`variant: old_title`) or the new title (`new_title`) of a
+link. `current`: IDs that are correct; `stale`: superseded IDs of the same lineage.
+`edge`: the link the query was made from.""",
             ),
             _details(
                 "questions",
                 f"""\
 {n_q} change-aware questions whose answer differs between the old and the new version.
 Fields: `text`, `answer_current`, `answer_stale`, `evidence_current` / `evidence_stale`
-(verbatim spans of the abstracts), `change_type` ({types}), `edge`, `current`, `stale`.
-Generated by `{qbackend}` (prompt `{qprompt}`) from {n_try} sampled edges; {n_ok} passed
-the checks (verbatim evidence, no RFC number or answer in the question, no answer argued
-from silence).""",
+(verbatim spans of the two abstracts), `change_type` ({types}), `edge`, `current`,
+`stale`. Generated by `{qbackend}` (prompt `{qprompt}`) from {n_try} sampled links;
+{n_ok} passed the checks (verbatim evidence, no RFC number or answer in the question,
+no answer argued from silence).""",
             ),
             _details(
                 "pairs",
@@ -427,38 +362,9 @@ from silence).""",
 Candidate pairs for lineage inference in the `strict` setting: the 10 nearest neighbours
 of each RFC by abstract and by title embedding (`BAAI/bge-small-en-v1.5`), older first.
 `label`: the index records that `new` obsoletes `old`. `label_lineage`: `new` is a later
-version through a chain. About 89% of true edges are among the candidates.""",
+version through a chain. About 89% of true links are among the candidates.""",
             ),
         ]
-    )
-
-    def section(title: str, text: str, image: str) -> str:
-        return "\n\n".join(x for x in (f"### {title}", text, image) if x)
-
-    hero = _img(
-        assets,
-        "fig_card_problem",
-        "A real ranking: the obsolete RFC 2581 ranks above RFC 5681, which replaced it",
-    )
-    corpus_img = _img(assets, "fig_card_corpus", "RFCs per decade, share later superseded")
-    sec1 = section(
-        "1. Retrieval puts the obsolete version first",
-        retrieval,
-        _img(assets, "fig_retrieval", "Retrieval staleness by retriever"),
-    )
-    sec2 = section(
-        "2. The error reaches the answer",
-        answers,
-        _img(assets, "fig_answers", "Answer outcomes per policy"),
-    )
-    figs3 = [
-        _img(assets, "fig_lineage", "Lineage inference methods"),
-        _img(assets, "fig_agent", "Agent variants on ambiguous pairs"),
-    ]
-    sec3 = section(
-        "3. Recovering the lineage without metadata",
-        lineage,
-        "\n\n".join(x for x in figs3 if x),
     )
 
     return f"""---
@@ -483,12 +389,12 @@ configs:
 
 # Supersede-Bench (RFC)
 
-**Does your RAG system cite the obsolete version?** Collections keep old documents
-next to the ones that replace them, and retrievers rank them as equally valid. This
-benchmark measures that on the IETF RFC series, whose index records exactly which RFC
-*obsoletes* which.
+**A benchmark for document versions in retrieval.** Collections keep old documents next
+to the ones that replace them. This dataset tests whether a retrieval or RAG system
+returns the version that is *in force*, and whether the replacement links can be
+recovered when nobody recorded them. It is built on the IETF RFC series, whose index
+records exactly which RFC *obsoletes* which.
 
-[📄 Paper (PDF)]({GITHUB}/blob/main/paper/main.pdf) ·
 [💻 Code]({GITHUB}) · [📝 Cite](#citation)
 
 {hero}
@@ -496,8 +402,8 @@ benchmark measures that on the IETF RFC series, whose index records exactly whic
 ## At a glance
 
 {manifest["n_docs"]:,} RFCs · {manifest["n_supersession_edges"]:,} supersession links ·
-{manifest["n_components"]:,} lineages (chains of versions). Every row of one lineage is in
-the same split (about 30% dev, 70% test), so no lineage is on both sides.
+{manifest["n_components"]:,} lineages (chains of versions, up to
+{manifest.get("max_component_size", "?")} documents).
 
 | config | what it holds | rows |
 |---|---|---|
@@ -505,14 +411,32 @@ the same split (about 30% dev, 70% test), so no lineage is on both sides.
 
 {corpus_img}
 
+## How it is built
+
+{BUILD_STEPS}
+
+## Three tasks
+
+| task | input | ground truth | metric |
+|---|---|---|---|
+{TASK_TABLE}
+
+<details>
+<summary><b>Metrics in detail</b></summary>
+
+{METRICS}
+
+</details>
+
 ## Quick start
 
 ```python
 from datasets import load_dataset
 
-questions = load_dataset("{REPO}", "questions", split="test")
+queries = load_dataset("{REPO}", "queries", split="test")
 corpus = load_dataset("{REPO}", "corpus", split="corpus")
-print(questions[0]["text"], "->", questions[0]["answer_current"])
+q = queries[0]
+print(q["text"], "| current:", q["current"], "| stale:", q["stale"])
 ```
 
 For lineage inference, derive the leakage-free view with the bundled script:
@@ -527,20 +451,6 @@ masking = importlib.util.module_from_spec(spec); spec.loader.exec_module(masking
 strict = corpus.map(lambda r: masking.apply(r, "strict"))
 ```
 
-## Three tasks
-
-| task | input | label | metric |
-|---|---|---|---|
-{TASK_TABLE}
-
-Baseline results from the paper (test split):
-
-{sec1}
-
-{sec2}
-
-{sec3}
-
 ## Examples
 
 {example_blocks}
@@ -551,11 +461,12 @@ Baseline results from the paper (test split):
 
 ## Known issues
 
-- In {n_flag} questions the edge's newer RFC has itself been superseded since
+- In {n_flag} questions the link's newer RFC has itself been superseded since
   (`reference_new_is_superseded: true`); its `answer_current` may be outdated. Filter
   them for the strictest evaluation.
-- Models have read many RFCs: answers are partly memorised, so staleness on a private
-  collection is likely worse.
+- Language models have read many RFCs, so an answer may come from memory rather than
+  from the retrieved documents. Run a closed-book baseline (no documents) to separate
+  the two.
 
 ## Source and licence
 
@@ -567,12 +478,12 @@ Built from `rfc-index.xml`, snapshot `sha256:{manifest["index_sha256"]}`
 ## Citation
 
 ```bibtex
-@misc{{hatoum2026supersede,
-  title  = {{Supersede: When Retrieval-Augmented Generation Cites the Obsolete Version}},
+@misc{{hatoum2026supersedebench,
+  title  = {{Supersede-Bench: Document Versions in Retrieval-Augmented Generation}},
   author = {{Hatoum, Carl}},
   year   = {{2026}},
-  howpublished = {{\\url{{{GITHUB}}}}},
-  note   = {{Dataset: https://huggingface.co/datasets/{REPO}}}
+  howpublished = {{\\url{{https://huggingface.co/datasets/{REPO}}}}},
+  note   = {{Code: {GITHUB}}}
 }}
 ```
 """
@@ -583,13 +494,12 @@ def main() -> None:
     ap.add_argument("--data", type=Path, default=Path("data/rfc"))
     ap.add_argument("--out", type=Path, default=Path("dist/hf/supersede-bench"))
     ap.add_argument("--no-pairs", action="store_true")
-    ap.add_argument("--results", type=Path, default=Path("results"))
     ap.add_argument("--figures", type=Path, default=Path("paper/generated"))
     ap.add_argument("--push", metavar="REPO_ID", help="upload to this Hugging Face dataset repo")
     ap.add_argument("--private", action="store_true")
     args = ap.parse_args()
 
-    counts = export(args.data, args.out, not args.no_pairs, args.results, args.figures)
+    counts = export(args.data, args.out, not args.no_pairs, args.figures)
     print(json.dumps(counts, indent=2))
     if args.push:
         from huggingface_hub import HfApi
@@ -601,7 +511,9 @@ def main() -> None:
             repo_id=args.push,
             repo_type="dataset",
             ignore_patterns=["__pycache__/*", "*.pyc", ".DS_Store"],
-            delete_patterns=["__pycache__/*", "*.pyc"],
+            # assets/* is re-uploaded from the local folder; figures dropped from the
+            # card disappear from the Hub too.
+            delete_patterns=["__pycache__/*", "*.pyc", "assets/*"],
         )
         print(f"https://huggingface.co/datasets/{args.push}")
 
