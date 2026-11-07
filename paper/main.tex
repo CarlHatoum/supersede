@@ -140,7 +140,7 @@ Figure~\ref{fig:problem} shows a real case from our benchmark.
   {\textbf{1.}\ RFC 2581 \quad 1999 \hfill\textcolor{orange}{\textbf{obsolete}}};
 \node[below=2mm of d1, doc] (d2)
   {\textbf{2.}\ RFC 5681 \quad 2009 \hfill\textcolor{aqua!70!black}{\textbf{current}}};
-\node[below=2mm of d2, doc, text=ink2] (d3) {\textbf{3.}\ RFC 896 \quad 1984 \hfill unrelated};
+\node[below=2mm of d2, doc, text=ink2] (d3) {\textbf{3.}\ RFC 896 \quad 1984 \hfill obsolete};
 \node[above=1mm of d1, font=\sffamily\scriptsize\bfseries, text=ink2] {hybrid retriever, top 3};
 \draw[arr] (q.east) -- (d1.west);
 \node[right=10mm of d1, yshift=-2mm, align=left, text width=46mm, font=\sffamily\small] (fix)
@@ -407,7 +407,7 @@ are wrong is the next test.}
 
 % =========================================================================
 \section{Q3b: a librarian agent for the uncertain cases}\label{sec:agent}
-\prelim[100 pairs · repeats, second model and downstream effect pending]
+\prelim[100 pairs · downstream effect and year noise pending]
 
 \paragraph{Design} The agent decides whether a newer document replaces an older
 one (Fig.~\ref{fig:agentdiagram}). It is a LangGraph state machine: \emph{triage}
@@ -515,6 +515,15 @@ $p=\res{ag.pair.ministral-3.full.cheap.strict.p}$), at
 \res{ag.ministral-3.full.seconds}~s per pair. It calls \code{compare} on every pair
 and never \code{find\_later}, so it decides from the two documents alone, like the
 no-tool variant.
+
+\paragraph{Run-to-run stability} Sampling at temperature
+\res{ag.qwen3.5-hermes.full.stab.temp}, \res{ag.qwen3.5-hermes.full.stab.runs} runs
+on the first \res{ag.qwen3.5-hermes.full.stab.n} pairs give balanced accuracies of
+\res{ag.qwen3.5-hermes.full.stab.range} for the full agent and
+\res{ag.qwen3.5-hermes.llm_only.stab.range} without tools; the label is the same in
+every run for \res{ag.qwen3.5-hermes.full.stab.unanimous} and
+\res{ag.qwen3.5-hermes.llm_only.stab.unanimous} of pairs. Sampling noise is small
+next to the confidence intervals, so the conclusions above do not depend on one run.
 
 All model-based methods say ``replaces'' too readily: the full agent does so on
 \res{ag.qwen3.5-hermes.full.yes} of a balanced sample, with true-positive rate

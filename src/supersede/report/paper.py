@@ -526,6 +526,15 @@ def agent_compare(num: Numbers, res: Path, files: dict, n: int = 100) -> dict[st
                 p0(yes),
             ]
         )
+    for st in r.get("stability", []):
+        key = f"ag.{st['alias']}.{st['variant']}.stab"
+        num[f"{key}.runs"] = st["runs"]
+        num[f"{key}.n"] = st["n_pairs"]
+        num[f"{key}.temp"] = f"{st['temperature']:g}"
+        num[f"{key}.mean"] = f2(st["ba_mean"])
+        num[f"{key}.sd"] = f2(st["ba_sd"])
+        num[f"{key}.range"] = f"{min(st['ba_per_run']):.2f}--{max(st['ba_per_run']):.2f}"
+        num[f"{key}.unanimous"] = p0(st["unanimous_share"])
     for pc in r["paired"]:
         a = pc["a"].split("/")
         b = pc["b"].split("/")

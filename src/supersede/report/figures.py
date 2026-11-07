@@ -64,6 +64,12 @@ def load(p: Path):
     return json.loads(p.read_text()) if p.exists() else None
 
 
+def _save(fig, out: Path, name: str) -> None:
+    """The vector PDF for the paper and a PNG (dataset card, slides)."""
+    fig.savefig(out / f"{name}.pdf")
+    fig.savefig(out / f"{name}.png", dpi=200, facecolor="white")
+
+
 def _row(rows, **match):
     return next(r for r in rows if all(r[k] == v for k, v in match.items()))
 
@@ -178,7 +184,7 @@ def fig_retrieval(res: Path, out: Path) -> bool:
         handletextpad=0.4,
         bbox_to_anchor=(0.5, -0.2),
     )
-    fig.savefig(out / "fig_retrieval.pdf")
+    _save(fig, out, "fig_retrieval")
     plt.close(fig)
     return True
 
@@ -237,7 +243,7 @@ def fig_answers(res: Path, out: Path) -> bool:
         bbox_to_anchor=(0.5, -0.13),
         handlelength=0.9,
     )
-    fig.savefig(out / "fig_answers.pdf")
+    _save(fig, out, "fig_answers")
     plt.close(fig)
     return True
 
@@ -295,7 +301,7 @@ def fig_lineage(res: Path, out: Path) -> bool:
         handletextpad=0.3,
         bbox_to_anchor=(0.5, -0.26),
     )
-    fig.savefig(out / "fig_lineage.pdf")
+    _save(fig, out, "fig_lineage")
     plt.close(fig)
     return True
 
@@ -370,7 +376,7 @@ def fig_agent(res: Path, out: Path) -> bool:
         ax.grid(axis="y", visible=False)
         ax.set_xlabel("balanced accuracy, 95% bootstrap CI")
         ax.set_title(f"{truth} ground truth")
-    fig.savefig(out / "fig_agent.pdf")
+    _save(fig, out, "fig_agent")
     plt.close(fig)
     return True
 
@@ -426,7 +432,7 @@ def fig_agent_cost(res: Path, out: Path) -> bool:
     ax.set_ylim(0.55, 0.95)
     ax.set_xlabel("seconds per pair (local model, Apple M4, log scale)")
     ax.set_ylabel("balanced accuracy (strict)")
-    fig.savefig(out / "fig_agent_cost.pdf")
+    _save(fig, out, "fig_agent_cost")
     plt.close(fig)
     return True
 
@@ -504,9 +510,182 @@ def fig_noise(res: Path, out: Path) -> bool:
         bbox_to_anchor=(0.5, -0.24),
         handlelength=2.2,
     )
-    fig.savefig(out / "fig_noise.pdf")
+    _save(fig, out, "fig_noise")
     plt.close(fig)
     return True
+
+
+# --- Figures for the dataset card (PNG only) -------------------------------------
+# The worked example of the paper's Fig. 1: the hybrid retriever's top 3 for the
+# query "TCP Congestion Control", and the same list after promote with lineage.
+EXAMPLE_QUERY = "TCP Congestion Control"
+EXAMPLE_RANKING = ["RFC2581", "RFC5681", "RFC896"]
+EXAMPLE_CHAIN = ["RFC2001", "RFC2581", "RFC5681"]
+
+
+def _doc_box(ax, x, y, w, rank, d, tag, colour):
+    from matplotlib.patches import FancyBboxPatch
+
+    ax.add_patch(
+        FancyBboxPatch(
+            (x, y - 0.075),
+            w,
+            0.15,
+            boxstyle="round,pad=0,rounding_size=0.015",
+            fc="white",
+            ec=colour if tag else GREY_LIGHT,
+            lw=1.3 if tag else 0.8,
+        )
+    )
+    num = d.doc_id.replace("RFC", "RFC ")
+    ax.text(x + 0.015, y, f"{rank}", fontsize=8, fontweight="bold", va="center")
+    ax.text(x + 0.045, y + 0.02, f"{num} · {d.year}", fontsize=7.5, fontweight="bold", va="center")
+    ax.text(
+        x + 0.045,
+        y - 0.035,
+        d.title[:34] + ("…" if len(d.title) > 34 else ""),
+        fontsize=6.5,
+        color=INK_2,
+        va="center",
+    )
+    if tag:
+        ax.text(
+            x + w - 0.012,
+            y + 0.02,
+            tag,
+            fontsize=6.5,
+            fontweight="bold",
+            color=colour,
+            ha="right",
+            va="center",
+        )
+
+
+def fig_card_problem(docs: dict, graph, out: Path) -> bool:
+    from supersede.rerank import promote_current
+
+    if not all(d in docs for d in EXAMPLE_RANKING + EXAMPLE_CHAIN):
+        return False
+    fig = plt.figure(figsize=(WIDTH, 2.75))
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis("off")
+
+    def tag(doc_id):
+        if graph.is_superseded(doc_id):
+            return "obsolete", ORANGE
+        if any(doc_id in graph.current_versions(r) for r in EXAMPLE_RANKING if r != doc_id):
+            return "current", AQUA
+        return "", GREY
+
+    ax.text(0.01, 0.95, f"query: “{EXAMPLE_QUERY}”", fontsize=8.5, fontweight="bold", va="center")
+    lists = [
+        ("as retrieved (hybrid, top 3)", EXAMPLE_RANKING, 0.02),
+        (
+            "with lineage (promote current versions)",
+            promote_current(EXAMPLE_RANKING, graph)[:3],
+            0.53,
+        ),
+    ]
+    for title, ranking, x in lists:
+        ax.text(x, 0.84, title, fontsize=7.5, color=INK_2, va="center")
+        for i, d in enumerate(ranking):
+            t, c = tag(d)
+            _doc_box(ax, x, 0.72 - 0.17 * i, 0.45, i + 1, docs[d], t, c)
+    ax.annotate(
+        "", (0.525, 0.55), (0.475, 0.55), arrowprops={"arrowstyle": "-|>", "color": INK_2, "lw": 1}
+    )
+    # lineage strip
+    ax.text(0.02, 0.135, "lineage in the index:", fontsize=7.5, color=INK_2, va="center")
+    xs = [0.24, 0.49, 0.74]
+    for i, (x, d) in enumerate(zip(xs, EXAMPLE_CHAIN, strict=True)):
+        head = not graph.is_superseded(d)
+        ax.text(
+            x,
+            0.135,
+            f"{d.replace('RFC', 'RFC ')} ({docs[d].year})",
+            fontsize=7.5,
+            fontweight="bold",
+            va="center",
+            ha="left",
+            color=AQUA if head else INK,
+            bbox={
+                "boxstyle": "round,pad=0.35",
+                "fc": "white",
+                "ec": AQUA if head else GREY_LIGHT,
+                "lw": 0.9,
+            },
+        )
+        if i:
+            ax.annotate(
+                "",
+                (x - 0.012, 0.135),
+                (xs[i - 1] + 0.165, 0.135),
+                arrowprops={"arrowstyle": "-|>", "color": INK_2, "lw": 0.9},
+            )
+            ax.text(
+                (x + xs[i - 1] + 0.153) / 2,
+                0.2,
+                "obsoleted by",
+                fontsize=6,
+                color=INK_2,
+                ha="center",
+            )
+    fig.savefig(out / "fig_card_problem.png", dpi=200, facecolor="white")
+    plt.close(fig)
+    return True
+
+
+def fig_card_corpus(docs: list, graph, out: Path) -> bool:
+    by = Counter()
+    for d in docs:
+        if d.year:
+            by[(d.year // 10 * 10, graph.is_superseded(d.doc_id))] += 1
+    decades = sorted({k[0] for k in by})
+    if not decades:
+        return False
+    cur = [by[(x, False)] for x in decades]
+    sup = [by[(x, True)] for x in decades]
+    fig, ax = plt.subplots(figsize=(WIDTH, 2.1))
+    xs = range(len(decades))
+    ax.bar(xs, cur, color=BLUE_LIGHT, width=0.62, label="still in force", edgecolor="white", lw=1)
+    ax.bar(
+        xs,
+        sup,
+        bottom=cur,
+        color=ORANGE,
+        width=0.62,
+        label="superseded since",
+        edgecolor="white",
+        lw=1,
+    )
+    for x, c, s_ in zip(xs, cur, sup, strict=True):
+        ax.text(x, c + s_ + 40, f"{s_ / (c + s_):.0%}", ha="center", fontsize=7, color=INK_2)
+    ax.set_xticks(list(xs), [f"{x}s" for x in decades])
+    ax.set_ylabel("RFCs published")
+    ax.grid(axis="x", visible=False)
+    ax.set_ylim(0, max(c + s_ for c, s_ in zip(cur, sup, strict=True)) * 1.15)
+    ax.legend(loc="upper left", ncols=2)
+    ax.set_title("RFCs per decade; above each bar, the share later superseded")
+    fig.savefig(out / "fig_card_corpus.png", dpi=200, facecolor="white")
+    plt.close(fig)
+    return True
+
+
+def card_figures(data: Path, out: Path) -> dict[str, bool]:
+    from supersede.corpus import load_docs
+    from supersede.lineage import LineageGraph
+
+    if not (data / "corpus.jsonl").exists():
+        return {}
+    docs = load_docs(data / "corpus.jsonl")
+    graph = LineageGraph(docs)
+    out.mkdir(parents=True, exist_ok=True)
+    return {
+        "fig_card_problem": fig_card_problem({d.doc_id: d for d in docs}, graph, out),
+        "fig_card_corpus": fig_card_corpus(docs, graph, out),
+    }
 
 
 def build(res: Path, out: Path) -> dict[str, bool]:
@@ -525,8 +704,9 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     ap.add_argument("--results", type=Path, default=Path("results"))
     ap.add_argument("--out", type=Path, default=Path("paper/generated"))
+    ap.add_argument("--data", type=Path, default=Path("data/rfc"))
     args = ap.parse_args()
-    print(build(args.results, args.out))
+    print(build(args.results, args.out) | card_figures(args.data, args.out))
 
 
 if __name__ == "__main__":

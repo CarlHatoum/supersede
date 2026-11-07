@@ -115,3 +115,13 @@ The execution plan (workstreams A–F, dated to the 7 Dec talk) lives in the pri
 - `serve/app.py`: /search, /lineage, /assess (cascade), MCP at /mcp, A2A at /a2a.
   18 s startup, ~110 ms warm search. Dockerfiles in deploy/ (not yet built).
   Needs from user for Cloud Run: GCP project, billing, L4 quota.
+
+### 2026-11-07: dataset card redesign; night-2 stability; night 3 started
+- HF card rebuilt by `export_hf.card()`: hero example figure, corpus-by-decade figure,
+  quick start, task table, headline results with the paper figures (PNG), example rows,
+  collapsible field reference. Numbers come from `report.paper.build` (no hand-typed
+  values). Pushed to hatoum/supersede-rfc; images verified on the Hub.
+- Repeat runs (T=0.3, 3×50 pairs): full 0.74–0.78, llm_only 0.72–0.74; same label in
+  every run for 80% / 90% of pairs. In the paper.
+- Paper Fig. 1: RFC 896 is obsolete (by RFC 7805), label corrected.
+- Night 3 started 2026-11-07 (year noise first, then downstream questions).

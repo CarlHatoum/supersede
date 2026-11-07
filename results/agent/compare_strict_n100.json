@@ -401,18 +401,36 @@
     {
       "model": "ollama:edtorre/qwen3.5-hermes",
       "alias": "qwen3.5-hermes",
+      "variant": "full",
+      "prompt": "agent-v2",
+      "temperature": 0.3,
+      "runs": 3,
+      "n_pairs": 50,
+      "ba_per_run": [
+        0.74,
+        0.74,
+        0.78
+      ],
+      "ba_mean": 0.7533333333333333,
+      "ba_sd": 0.023094010767585053,
+      "unanimous_share": 0.8
+    },
+    {
+      "model": "ollama:edtorre/qwen3.5-hermes",
+      "alias": "qwen3.5-hermes",
       "variant": "llm_only",
       "prompt": "agent-v2",
       "temperature": 0.3,
-      "runs": 2,
-      "n_pairs": 15,
+      "runs": 3,
+      "n_pairs": 50,
       "ba_per_run": [
-        0.7232142857142857,
-        0.7232142857142857
+        0.72,
+        0.74,
+        0.74
       ],
-      "ba_mean": 0.7232142857142857,
-      "ba_sd": 0.0,
-      "unanimous_share": 0.8666666666666667
+      "ba_mean": 0.7333333333333334,
+      "ba_sd": 0.011547005383792525,
+      "unanimous_share": 0.9
     }
   ]
 }
