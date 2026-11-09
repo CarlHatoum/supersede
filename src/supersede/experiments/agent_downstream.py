@@ -83,6 +83,38 @@ def run(args) -> dict:
         "n_band_decisions_used": used,
         "n_edges": {"cheap_scorer": len(v0_edges), "cascade": len(cascade_edges)},
         "downstream": downstream(rankings, queries, graphs),
+        "paired": paired_current1(rankings, queries, graphs["cascade"], graphs["cheap_scorer"]),
+    }
+
+
+def paired_current1(rankings, queries, a, b, n_resamples: int = 2000, seed: int = 0) -> dict:
+    """Per-question current@1 of graph ``a`` vs ``b``: exact McNemar and bootstrap CI."""
+    import random
+
+    from supersede.experiments.agent_compare import mcnemar_exact
+    from supersede.experiments.lineage_inference import score
+    from supersede.rerank import promote_current
+
+    sa = [
+        score(promote_current(r, a), q)["current@1"] for r, q in zip(rankings, queries, strict=True)
+    ]
+    sb = [
+        score(promote_current(r, b), q)["current@1"] for r, q in zip(rankings, queries, strict=True)
+    ]
+    a_only = sum(bool(x) and not y for x, y in zip(sa, sb, strict=True))
+    b_only = sum(bool(y) and not x for x, y in zip(sa, sb, strict=True))
+    rng, n = random.Random(seed), len(sa)
+    diffs = sorted(
+        sum(sa[i] - sb[i] for i in (rng.randrange(n) for _ in range(n))) / n
+        for _ in range(n_resamples)
+    )
+    return {
+        "n": n,
+        "diff": (sum(sa) - sum(sb)) / n,
+        "diff_ci95": [diffs[int(0.025 * n_resamples)], diffs[int(0.975 * n_resamples) - 1]],
+        "a_only": a_only,
+        "b_only": b_only,
+        "mcnemar_p": mcnemar_exact(a_only, b_only),
     }
 
 
@@ -104,6 +136,11 @@ def main() -> None:
     print(f"coverage {result['coverage']:.0%} of {result['n_relevant_pairs']} relevant pairs")
     for name, d in result["downstream"].items():
         print(f"  {name:13} current@1 {d['current@1']:.3f}  gap closed {d['gap_closed']:.0%}")
+    pc = result["paired"]
+    print(
+        f"  cascade vs cheap scorer: {pc['diff']:+.3f} {pc['diff_ci95']}, "
+        f"{pc['a_only']} vs {pc['b_only']} questions, McNemar p={pc['mcnemar_p']:.3f}"
+    )
 
 
 if __name__ == "__main__":

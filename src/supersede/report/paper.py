@@ -458,21 +458,23 @@ VARIANT_LABEL = {
 }
 
 
-def agent_compare(num: Numbers, res: Path, files: dict, n: int = 100) -> dict[str, str]:
+def agent_compare(
+    num: Numbers, res: Path, files: dict, n: int = 100, setting: str = "strict", prefix: str = "ag"
+) -> dict[str, str]:
     """The n-pair comparison of agent variants and the cheap scorer (``agent_compare``)."""
-    name = f"agent/compare_strict_n{n}.json"
+    name = f"agent/compare_{setting}_n{n}.json"
     r = load(res / name)
     if not r:
         return {}
-    files[f"Agent variants ({n} pairs)"] = name
-    num["ag.n"] = r["n"]
-    num["ag.half"] = r["n"] // 2
-    num["ag.band"] = f"[{r['band'][0]}, {r['band'][1]})"
-    num["ag.bandsize"] = f"{r['band_size']:,}".replace(",", "{,}")
-    num["ag.prior.strict"] = f2(r["band_positive_rate"])
-    num["ag.prior.strict.pct"] = p0(r["band_positive_rate"])
-    num["ag.prior.lineage"] = f2(r["band_positive_rate_lineage"])
-    num["ag.threshold"] = r["cheap_threshold"]
+    files[f"Agent variants ({n} pairs, {setting})"] = name
+    num[f"{prefix}.n"] = r["n"]
+    num[f"{prefix}.half"] = r["n"] // 2
+    num[f"{prefix}.band"] = f"[{r['band'][0]}, {r['band'][1]})"
+    num[f"{prefix}.bandsize"] = f"{r['band_size']:,}".replace(",", "{,}")
+    num[f"{prefix}.prior.strict"] = f2(r["band_positive_rate"])
+    num[f"{prefix}.prior.strict.pct"] = p0(r["band_positive_rate"])
+    num[f"{prefix}.prior.lineage"] = f2(r["band_positive_rate_lineage"])
+    num[f"{prefix}.threshold"] = r["cheap_threshold"]
 
     def put(key, m):
         num[f"{key}.tpr"] = f2(m["tpr"])
@@ -491,7 +493,9 @@ def agent_compare(num: Numbers, res: Path, files: dict, n: int = 100) -> dict[st
         entries = [("cheap scorer (v0)", r["cheap_scorer"][truth], None)]
         entries += [(label(m), m[truth], m) for m in r["methods"]]
         for i, (name_, m, meth) in enumerate(entries):
-            key = "ag.cheap" if meth is None else f"ag.{meth['alias']}.{meth['variant']}"
+            key = (
+                f"{prefix}.cheap" if meth is None else f"{prefix}.{meth['alias']}.{meth['variant']}"
+            )
             put(f"{key}.{truth}", m)
             cost = "--" if meth is None else f"{meth['cost']['seconds']:.0f}"
             rows.append(
@@ -507,7 +511,7 @@ def agent_compare(num: Numbers, res: Path, files: dict, n: int = 100) -> dict[st
             )
     cost_rows = []
     for m in r["methods"]:
-        c, key = m["cost"], f"ag.{m['alias']}.{m['variant']}"
+        c, key = m["cost"], f"{prefix}.{m['alias']}.{m['variant']}"
         num[f"{key}.seconds"] = f"{c['seconds']:.0f}"
         num[f"{key}.calls"] = f"{c['calls']:.1f}"
         num[f"{key}.tools"] = f"{c['tool_calls']:.1f}"
@@ -527,7 +531,7 @@ def agent_compare(num: Numbers, res: Path, files: dict, n: int = 100) -> dict[st
             ]
         )
     for st in r.get("stability", []):
-        key = f"ag.{st['alias']}.{st['variant']}.stab"
+        key = f"{prefix}.{st['alias']}.{st['variant']}.stab"
         num[f"{key}.runs"] = st["runs"]
         num[f"{key}.n"] = st["n_pairs"]
         num[f"{key}.temp"] = f"{st['temperature']:g}"
@@ -542,20 +546,20 @@ def agent_compare(num: Numbers, res: Path, files: dict, n: int = 100) -> dict[st
         kb = "cheap" if pc["b"] == "cheap scorer" else f"{b[0]}.{b[1]}"
         for truth in ("strict", "lineage"):
             d = pc[truth]
-            key = f"ag.pair.{ka}.{kb}.{truth}"
+            key = f"{prefix}.pair.{ka}.{kb}.{truth}"
             num[f"{key}.p"] = f"{d['mcnemar_p']:.2f}"
             num[f"{key}.diff"] = f"{d['ba_diff']:+.2f}"
             num[f"{key}.diff.ci"] = ci(d["ba_diff_ci95"], lambda x: f"{x:+.2f}")
             num[f"{key}.aonly"] = d["a_only_correct"]
             num[f"{key}.bonly"] = d["b_only_correct"]
     return {
-        "tab_agent": table(
+        f"tab_agent{'' if prefix == 'ag' else '_' + prefix}": table(
             "llrrlrr",
             ["truth", "method", "TPR", "TNR", "bal. acc. [95\\% CI]", "est. prec.", "s/pair"],
             rows,
             (split,),
         ),
-        "tab_agent_cost": table(
+        f"tab_agent{'' if prefix == 'ag' else '_' + prefix}_cost": table(
             "lrrrrrr",
             [
                 "method",
@@ -569,6 +573,28 @@ def agent_compare(num: Numbers, res: Path, files: dict, n: int = 100) -> dict[st
             cost_rows,
         ),
     }
+
+
+def agent_downstream_numbers(num: Numbers, res: Path, files: dict) -> None:
+    """Retrieval with the cascade's lineage (``agent_downstream``), one file per variant."""
+    for p in sorted((res / "agent").glob("downstream_*_*.json")):
+        r = json.loads(p.read_text())
+        q, v = r["queries"], r["variant"]
+        files[f"Cascade downstream ({q}, {v.replace('_', ' ')})"] = "agent/" + p.name
+        key = f"ds.{q}.{v}"
+        num[f"{key}.n"] = r["n_queries"]
+        num[f"{key}.npairs"] = r["n_relevant_pairs"]
+        num[f"{key}.coverage"] = p0(r["coverage"])
+        for m, d in r["downstream"].items():
+            num[f"{key}.{m}.current1"] = p0(d["current@1"])
+            num[f"{key}.{m}.gap"] = p0(d["gap_closed"])
+        pc = r.get("paired")
+        if pc:
+            num[f"{key}.diff"] = f"{100 * pc['diff']:+.0f}"
+            num[f"{key}.diff.ci"] = ci([100 * x for x in pc["diff_ci95"]], lambda x: f"{x:+.0f}")
+            num[f"{key}.aonly"] = pc["a_only"]
+            num[f"{key}.bonly"] = pc["b_only"]
+            num[f"{key}.p"] = f"{pc['mcnemar_p']:.2f}"
 
 
 def agent_traces(res: Path) -> str:
@@ -660,6 +686,8 @@ def build(res: Path, data: Path, out: Path) -> dict[str, str]:
     closed_book(num, res, files)
     tables |= agent(num, res, files)
     tables |= agent_compare(num, res, files)
+    agent_compare(num, res, files, setting="strict-noise50", prefix="agn")  # numbers only
+    agent_downstream_numbers(num, res, files)
     tables["agent_traces"] = agent_traces(res)
     num["meta.rev"] = git_rev()
     num["meta.date"] = datetime.now().strftime("%Y-%m-%d")

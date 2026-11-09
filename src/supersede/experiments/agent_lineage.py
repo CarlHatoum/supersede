@@ -54,7 +54,7 @@ SAMPLE_VERSION = "s2"  # nested sampling (s1 was the non-nested 20-pair sample)
 
 def band_pairs(cs, low: float, high: float) -> list[dict]:
     return [
-        {"old": o, "new": nw, "gold": y, "cheap_proba": round(p, 4)}
+        {"old": o, "new": nw, "gold": y, "cheap_proba": round(float(p), 4)}
         for (o, nw), y, s, p in zip(cs.pairs, cs.y, cs.split, cs.proba, strict=True)
         if s == "test" and low <= p < high
     ]

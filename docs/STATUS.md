@@ -125,3 +125,14 @@ The execution plan (workstreams A–F, dated to the 7 Dec talk) lives in the pri
   every run for 80% / 90% of pairs. In the paper.
 - Paper Fig. 1: RFC 896 is obsolete (by RFC 7805), label corrected.
 - Night 3 started 2026-11-07 (year noise first, then downstream questions).
+
+### 2026-11-09: night 3 (year noise, downstream) in the paper
+- Year noise (p=0.5, seed 0, same 100 pairs): cheap scorer 0.72 -> 0.68 (TPR 0.62 -> 0.44);
+  llm_only 0.76 -> 0.74; full 0.75 -> 0.76. Agent vs scorer under noise +0.08, p=0.27.
+- Cascade downstream (questions, llm_only on all 203 relevant band pairs): current@1
+  55% (scorer) -> 67% (cascade), gap closed 49% -> 66%; +12 pts [+2, +22], 7 vs 1
+  questions, McNemar p=0.07.
+- Fixes: agent_compare paired stats now use each sample row's own cheap score (noisy
+  runs were using the clean score from the decision log); noisy scorer orders pairs by
+  year only, as in recency_noise.
+- Full-agent downstream run in progress (laptop slept on battery again overnight).

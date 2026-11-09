@@ -24,6 +24,7 @@ import argparse
 import json
 import math
 import random
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -36,6 +37,8 @@ from supersede.experiments.agent_lineage import (
     sample_band,
 )
 from supersede.experiments.lineage_inference import cheap_scores
+from supersede.experiments.recency_noise import corrupt_years
+from supersede.librarian.candidates import year_only_order
 from supersede.lineage import LineageGraph
 
 MIN_COVERAGE = 0.95  # a configuration is reported once it has decided this share of the sample
@@ -120,8 +123,23 @@ def run(args) -> dict:
     data = Path(args.data)
     docs = load_docs(data / "corpus.jsonl")
     gold = LineageGraph(docs)
-    cs = cheap_scores(args.setting, data, docs, gold)
+    base, noise = parse_setting(args.setting)
+    cs = cheap_scores(base, data, docs, gold)
+    # The sample is always drawn from the clean band, so noisy runs use the same pairs.
     sample, prior, band = sample_band(cs, args.low, args.high, args.n, args.seed)
+    threshold = float(cs.threshold)
+    if noise:
+        # The cheap scorer sees the same corrupted years as the agent did.
+        noisy_docs = with_years(docs, corrupt_years(docs, noise, 0))
+        # As in recency_noise: order pairs by year only, never by RFC number (that would
+        # leak publication order). A pair the noisy years flip is not a candidate: score 0.
+        noisy = cheap_scores(base, data, noisy_docs, gold, order_key=year_only_order)
+        proba = dict(zip(noisy.pairs, noisy.proba, strict=True))
+        sample = [
+            {**p, "cheap_proba": round(float(proba.get((p["old"], p["new"]), 0.0)), 4)}
+            for p in sample
+        ]
+        threshold = float(noisy.threshold)
     prior_lineage = sum(b["new"] in gold.descendants(b["old"]) for b in band) / len(band)
     keys = [(p["old"], p["new"]) for p in sample]
     lineage_gold = {k: int(k[1] in gold.descendants(k[0])) for k in keys}
@@ -138,7 +156,12 @@ def run(args) -> dict:
         meta = parse_log_name(path)
         decided = {(r["old"], r["new"]): r for r in read_jsonl(path) if r.get("label")}
         rows = [
-            {**p, **decided[(p["old"], p["new"])], "gold": p["gold"]}
+            {
+                **p,
+                **decided[(p["old"], p["new"])],
+                "gold": p["gold"],
+                "cheap_proba": p["cheap_proba"],
+            }
             for p in sample
             if (p["old"], p["new"]) in decided
         ]
@@ -150,7 +173,7 @@ def run(args) -> dict:
         return r["label"] == "supersedes"
 
     def cheap_pred(r):
-        return r["cheap_proba"] >= cs.threshold
+        return r["cheap_proba"] >= threshold
 
     result = {
         "experiment": "agent_compare",
@@ -161,7 +184,8 @@ def run(args) -> dict:
         "band_size": len(band),
         "band_positive_rate": prior,
         "band_positive_rate_lineage": prior_lineage,
-        "cheap_threshold": cs.threshold,
+        "cheap_threshold": threshold,
+        "year_noise": noise,
         "cheap_scorer": {
             t: summarise(
                 with_truth(sample, t), cheap_pred, prior if t == "strict" else prior_lineage
@@ -276,6 +300,18 @@ def run(args) -> dict:
             }
         )
     return result
+
+
+def parse_setting(setting: str) -> tuple[str, float]:
+    """``strict-noise50`` -> (``strict``, 0.5): the decision-log tag of a year-noise run."""
+    m = re.fullmatch(r"(\w+)-noise(\d+)", setting)
+    return (m.group(1), int(m.group(2)) / 100) if m else (setting, 0.0)
+
+
+def with_years(docs, years: dict):
+    import dataclasses
+
+    return [dataclasses.replace(d, year=years[d.doc_id]) for d in docs]
 
 
 def main() -> None:

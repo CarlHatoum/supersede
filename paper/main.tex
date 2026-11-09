@@ -108,12 +108,17 @@ and every result are public, and this draft is rebuilt from them.
   to perfect lineage, but simple newest-first ranking does about as well, and both
   degrade together when years are missing or wrong
   (Figs.~\ref{fig:lineage},~\ref{fig:noise}).
-\item \textbf{On ambiguous pairs, reading helps a little; tools do not yet.} On
-  \res{ag.n} pairs the scorer finds ambiguous, a local 9.7B model reaches
-  \res{ag.qwen3.5-hermes.full.strict.ba} balanced accuracy with tools and
-  \res{ag.qwen3.5-hermes.llm_only.strict.ba} from one call without them, against
-  \res{ag.cheap.strict.ba} for the scorer; no difference is significant, and the
-  gain grows when later versions in the same chain count as right
+\item \textbf{Reading the ambiguous pairs helps; tools do not.} On \res{ag.n} pairs
+  the scorer finds ambiguous, a local 9.7B model reaches
+  \res{ag.qwen3.5-hermes.llm_only.strict.ba} balanced accuracy in one call and
+  \res{ag.qwen3.5-hermes.full.strict.ba} as a tool-using agent, against
+  \res{ag.cheap.strict.ba} for the scorer; with half the years corrupted the model
+  barely moves (\res{agn.qwen3.5-hermes.llm_only.strict.ba}) while the scorer drops
+  to \res{agn.cheap.strict.ba}. Used in a cascade, it raises the share of questions
+  with the current version first from \res{ds.questions.llm_only.cheap_scorer.current1}
+  to \res{ds.questions.llm_only.cascade.current1}
+  (\res{ds.questions.llm_only.cascade.gap} of the gap to perfect lineage closed).
+  None of these differences is significant at this sample size
   (Figs.~\ref{fig:agent},~\ref{fig:agentcost}).
 \end{enumerate}
 \end{tcolorbox}
@@ -402,12 +407,12 @@ lineage keeps \res{noise.title.lineage_v0.50.current1}
 year, so it degrades at the same rate, and with correct years simple recency
 already matches it (title queries) or beats it (questions). Both stay far below
 oracle lineage at every noise level. Closing that gap needs judgements made from
-the content, which is what the agent is for; whether the agent holds up when years
-are wrong is the next test.}
+the content, which is what the agent is for; §\ref{sec:agent} tests whether reading
+holds up when years are wrong.}
 
 % =========================================================================
 \section{Q3b: a librarian agent for the uncertain cases}\label{sec:agent}
-\prelim[100 pairs · downstream effect and year noise pending]
+\prelim[100 pairs · full-agent downstream run in progress]
 
 \paragraph{Design} The agent decides whether a newer document replaces an older
 one (Fig.~\ref{fig:agentdiagram}). It is a LangGraph state machine: \emph{triage}
@@ -532,7 +537,40 @@ All model-based methods say ``replaces'' too readily: the full agent does so on
 \res{ag.prior.strict.pct} of pairs are true links, this gives an expected precision
 of \res{ag.qwen3.5-hermes.full.strict.prec}, below the scorer's
 \res{ag.cheap.strict.prec}. Whether the extra recall outweighs the extra false
-links downstream is what the cascade experiment measures (pending).
+links downstream is measured next.
+
+\paragraph{When years are wrong} We rerun the same \res{ag.n} pairs with half of all
+years removed or shifted (the corruption of §\ref{sec:noise}; seed 0), shown to the
+model through its tools and used by the cheap scorer, retrained on the corrupted
+years. The scorer drops from \res{ag.cheap.strict.ba} to \res{agn.cheap.strict.ba}
+\res{agn.cheap.strict.ba.ci}: it misses more true links (true-positive rate
+\res{ag.cheap.strict.tpr} to \res{agn.cheap.strict.tpr}), because it orients and
+scores pairs by year. The model barely moves: \res{ag.qwen3.5-hermes.llm_only.strict.ba}
+to \res{agn.qwen3.5-hermes.llm_only.strict.ba} without tools,
+\res{ag.qwen3.5-hermes.full.strict.ba} to \res{agn.qwen3.5-hermes.full.strict.ba}
+with them. The gap to the scorer widens (\res{agn.pair.qwen3.5-hermes.full.cheap.strict.diff}
+\res{agn.pair.qwen3.5-hermes.full.cheap.strict.diff.ci} for the agent, McNemar
+$p=\res{agn.pair.qwen3.5-hermes.full.cheap.strict.p}$) but is not significant at
+\res{ag.n} pairs. This is the direction the cascade needs: the step that reads is the
+one that does not lean on dates.
+
+\paragraph{Effect on retrieval} The cascade keeps the scorer's decision outside the
+band and uses the model's verdict inside it. Only band pairs whose older document
+appears in the hybrid top 10 of a test question can change a ranking; there are
+\res{ds.questions.llm_only.npairs}, and the no-tool model decided all of them
+(coverage \res{ds.questions.llm_only.coverage}). With \code{promote}, the current
+version comes first for \res{ds.questions.llm_only.cascade.current1} of the
+\res{ds.questions.llm_only.n} test questions, against
+\res{ds.questions.llm_only.cheap_scorer.current1} with the scorer alone and
+\res{ds.questions.llm_only.oracle.current1} with perfect lineage: the cascade closes
+\res{ds.questions.llm_only.cascade.gap} of the gap, the scorer
+\res{ds.questions.llm_only.cheap_scorer.gap}. The difference
+(\res{ds.questions.llm_only.diff} points, bootstrap 95\% CI
+\res{ds.questions.llm_only.diff.ci}) comes from
+\res{ds.questions.llm_only.aonly} questions fixed against
+\res{ds.questions.llm_only.bonly} broken (exact McNemar
+$p=\res{ds.questions.llm_only.p}$). The extra false links cost less than the extra
+true ones gain.
 
 \begin{figure}[t]
 \centering
@@ -543,11 +581,11 @@ bootstrap intervals; hollow: Ministral~3. The dashed line is the cheap scorer.}
 \end{figure}
 
 \Takeaway{On pairs where cheap signals are ambiguous, reading the two documents
-helps a little, mostly by recognising later versions in a chain; the investigation
-tools add cost but no accuracy. A tool-using agent is not yet justified over a
-single model call here. Next: repeated runs, a second model, the effect on
-retrieval through the cascade, and whether reading holds up when years are wrong,
-where the cheap scorer and recency both fail (§\ref{sec:noise}).}
+helps: a little on its own, more in retrieval through the cascade, and it holds up
+when years are wrong, where the scorer and recency degrade. The investigation
+tools add cost but no accuracy, so a single model call is the better design here.
+Every gain is in the expected direction and none is yet significant at this
+sample size.}
 
 % =========================================================================
 \section{Related work}\label{sec:related}
@@ -598,10 +636,10 @@ reasoning and tool calls~\cite{yao2023react}.
   head-only generation is planned.
 \item \textbf{One answering model} so far; open-weight answering models are in
   progress.
-\item \textbf{Agent evidence is limited.} One model, one prompt, \res{ag.n} pairs:
-  the intervals are about $\pm$0.08 wide, so differences under 0.1 are not
-  detectable. Repeated runs, a second model, the downstream effect and the
-  year-noise condition are in progress.
+\item \textbf{Agent evidence is limited.} One prompt, \res{ag.n} pairs and
+  \res{ds.questions.llm_only.n} test questions: intervals are about $\pm$0.08 wide,
+  so differences under 0.1 are not detectable. One corruption seed. The full
+  agent's downstream run is in progress.
 \item \textbf{Deployment.} The serving code (HTTP search with inferred lineage, the
   cascade, MCP and A2A interfaces) is in the repository; the cloud deployment is in progress and
   will be reported with latency and cost.

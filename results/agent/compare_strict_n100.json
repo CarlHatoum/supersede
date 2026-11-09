@@ -11,6 +11,7 @@
   "band_positive_rate": 0.14149908592321755,
   "band_positive_rate_lineage": 0.24753199268738574,
   "cheap_threshold": 0.94,
+  "year_noise": 0.0,
   "cheap_scorer": {
     "strict": {
       "tpr": 0.62,
