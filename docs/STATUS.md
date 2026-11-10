@@ -136,3 +136,4 @@ The execution plan (workstreams A–F, dated to the 7 Dec talk) lives in the pri
   runs were using the clean score from the decision log); noisy scorer orders pairs by
   year only, as in recency_noise.
 - Full-agent downstream run in progress (laptop slept on battery again overnight).
+- Full-agent downstream (all 203 pairs after an Ollama restart): gap closed 60% (vs 66% one call, 49% scorer), 5 vs 1 questions, p=0.22.

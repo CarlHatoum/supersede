@@ -412,7 +412,7 @@ holds up when years are wrong.}
 
 % =========================================================================
 \section{Q3b: a librarian agent for the uncertain cases}\label{sec:agent}
-\prelim[100 pairs · full-agent downstream run in progress]
+\prelim[100 pairs · one corruption seed]
 
 \paragraph{Design} The agent decides whether a newer document replaces an older
 one (Fig.~\ref{fig:agentdiagram}). It is a LangGraph state machine: \emph{triage}
@@ -570,7 +570,11 @@ version comes first for \res{ds.questions.llm_only.cascade.current1} of the
 \res{ds.questions.llm_only.aonly} questions fixed against
 \res{ds.questions.llm_only.bonly} broken (exact McNemar
 $p=\res{ds.questions.llm_only.p}$). The extra false links cost less than the extra
-true ones gain.
+true ones gain. With the full agent deciding the same pairs instead, the cascade
+closes \res{ds.questions.full.cascade.gap} of the gap (current version first for
+\res{ds.questions.full.cascade.current1}; \res{ds.questions.full.aonly} questions
+fixed against \res{ds.questions.full.bonly} broken, $p=\res{ds.questions.full.p}$):
+no better than one call, at about four times the cost.
 
 \begin{figure}[t]
 \centering
@@ -638,8 +642,8 @@ reasoning and tool calls~\cite{yao2023react}.
   progress.
 \item \textbf{Agent evidence is limited.} One prompt, \res{ag.n} pairs and
   \res{ds.questions.llm_only.n} test questions: intervals are about $\pm$0.08 wide,
-  so differences under 0.1 are not detectable. One corruption seed. The full
-  agent's downstream run is in progress.
+  so differences under 0.1 are not detectable. One corruption seed for the
+  year-noise runs.
 \item \textbf{Deployment.} The serving code (HTTP search with inferred lineage, the
   cascade, MCP and A2A interfaces) is in the repository; the cloud deployment is in progress and
   will be reported with latency and cost.

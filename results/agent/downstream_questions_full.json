@@ -1,0 +1,54 @@
+{
+  "experiment": "agent_downstream",
+  "queries": "questions",
+  "n_queries": 49,
+  "setting": "strict",
+  "model": "ollama:edtorre/qwen3.5-hermes",
+  "variant": "full",
+  "prompt": "agent-v2",
+  "band": [
+    0.8,
+    0.98
+  ],
+  "n_relevant_pairs": 203,
+  "n_relevant_decided": 203,
+  "coverage": 1.0,
+  "n_band_decisions_used": 313,
+  "n_edges": {
+    "cheap_scorer": 1254,
+    "cascade": 1285
+  },
+  "downstream": {
+    "no_lineage": {
+      "current@1": 0.20408163265306123,
+      "stale@1": 0.7142857142857143,
+      "gap_closed": 0.0
+    },
+    "cheap_scorer": {
+      "current@1": 0.5510204081632653,
+      "stale@1": 0.3469387755102041,
+      "gap_closed": 0.4857142857142856
+    },
+    "cascade": {
+      "current@1": 0.6326530612244898,
+      "stale@1": 0.22448979591836735,
+      "gap_closed": 0.6
+    },
+    "oracle": {
+      "current@1": 0.9183673469387755,
+      "stale@1": 0.0,
+      "gap_closed": 1.0
+    }
+  },
+  "paired": {
+    "n": 49,
+    "diff": 0.08163265306122448,
+    "diff_ci95": [
+      0.0,
+      0.1836734693877551
+    ],
+    "a_only": 5,
+    "b_only": 1,
+    "mcnemar_p": 0.21875
+  }
+}
