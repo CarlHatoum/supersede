@@ -137,3 +137,17 @@ The execution plan (workstreams A–F, dated to the 7 Dec talk) lives in the pri
   year only, as in recency_noise.
 - Full-agent downstream run in progress (laptop slept on battery again overnight).
 - Full-agent downstream (all 203 pairs after an Ollama restart): gap closed 60% (vs 66% one call, 49% scorer), 5 vs 1 questions, p=0.22.
+
+## 2026-11-11: Cloud Run deployment as code (not applied yet)
+- `infra/terraform/` (google provider ~> 8.11, `terraform validate` clean): APIs,
+  Artifact Registry (keeps 3 versions), VPC + subnet with Private Google Access,
+  service accounts (api, llm, build), `supersede-llm` (Ollama, 1× L4, 4 CPU / 16 GiB,
+  0–1 instances, internal ingress only), `supersede-api` (2 CPU / 4 GiB, 0–2 instances,
+  public, Direct VPC egress all-traffic so its calls to the LLM count as internal,
+  `HF_HUB_OFFLINE=1`), optional monthly budget alert.
+- `deploy/cloudbuild.yaml` builds both images on Cloud Build; `deploy/deploy.sh` runs
+  base infra -> builds -> services -> smoke test (healthz, search, an ambiguous /assess).
+- `Dockerfile.llm` now pins ollama 0.40.14 (the local version that runs Qwen 3.5;
+  0.12.6 predates it).
+- Blocked on: GCP project ID, billing, L4 quota in the region. Then: run
+  `deploy/deploy.sh`, measure p50/p95 latency (warm and cold) and cost per 1k assessments.

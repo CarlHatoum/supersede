@@ -6,3 +6,6 @@ data/
 paper/main.log
 dist/
 results/agent/logs/
+infra/terraform/.terraform/
+infra/terraform/*.tfstate*
+infra/terraform/terraform.tfvars

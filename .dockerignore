@@ -6,3 +6,5 @@ paper
 dist
 **/__pycache__
 .git
+infra
+.terraform

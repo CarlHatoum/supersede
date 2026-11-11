@@ -69,9 +69,20 @@ claude mcp add --transport http supersede http://localhost:8080/mcp/       # ove
 claude mcp add supersede -- .venv/bin/python -m supersede.serve.mcp_server  # or over stdio
 ```
 
-**Deploy:** `deploy/Dockerfile.api` (CPU; corpus, embeddings and lineage built into
-the image) and `deploy/Dockerfile.llm` (Ollama with the model built in, for a
-Cloud Run L4 GPU that scales to zero).
+**Deploy to Cloud Run:** two services, defined in [`infra/terraform/`](infra/terraform/).
+`supersede-api` (CPU; corpus, embeddings and lineage built into the image) is public;
+`supersede-llm` (Ollama with the model built in, one NVIDIA L4, scales to zero)
+accepts only internal traffic, which the API sends through Direct VPC egress. Images
+are built on Cloud Build, so no local Docker is needed.
+
+```bash
+gcloud auth login && gcloud auth application-default login
+cp infra/terraform/terraform.tfvars.example infra/terraform/terraform.tfvars  # set project_id
+deploy/deploy.sh            # base infra -> image builds -> services -> smoke test
+```
+
+The project needs Cloud Run L4 GPU quota in the chosen region. Setting
+`billing_account` in `terraform.tfvars` adds a monthly budget alert.
 
 ## Experiments
 
@@ -124,7 +135,8 @@ src/supersede/
   librarian/                 candidates, features, cheap scorers, masking, agent, MCP-facing tools
   serve/                     FastAPI app (search, lineage, assess, A2A) and MCP server
   experiments/               one module per experiment
-deploy/                      Dockerfiles for Cloud Run
+deploy/                      Dockerfiles, Cloud Build config, deploy script
+infra/terraform/             Cloud Run services, registry, VPC, budget
 scripts/                     agent queue, demo
 results/                     committed outputs
 ```

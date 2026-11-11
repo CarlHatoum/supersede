@@ -1,0 +1,4 @@
+project_id = "your-project-id"
+region     = "europe-west4"
+# billing_account = "XXXXXX-XXXXXX-XXXXXX"   # enables the budget alert
+# budget_eur      = 30
